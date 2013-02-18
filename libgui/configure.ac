@@ -42,32 +42,6 @@ AC_EGREP_CPP(strncasecmp, [#include <string.h>],
   AC_DEFINE(HAVE_STRNCASECMP_DECL))
 
 
-AC_CACHE_CHECK([for cygwin32], ide_cv_os_cygwin32,
-[AC_EGREP_CPP(lose, [
-#ifdef __CYGWIN32__
-lose
-#endif],[ide_cv_os_cygwin32=yes],[ide_cv_os_cygwin32=no])])
-ac_win_build="no"
-if test x$ide_cv_os_cygwin32 = xyes; then
-  ac_win_build="yes"
-fi
-
-case "${host}" in
-*-*-cygwin*)
-        touch ac$$.c
-        if ${CC} -c -mwin32 ac$$.c >/dev/null 2>&1; then
-            case "$LIBGUI_CFLAGS" in
-                *-mwin32*) ;;
-                *) LIBGUI_CFLAGS="-mwin32 $LIBGUI_CFLAGS" ;;
-            esac
-        fi
-        rm -f ac$$.o ac$$.c
-        ;;
-esac
-case "${host}" in
-*-*-cygwin*)
-	LIBGUI_CFLAGS="-DWIN32 $LIBGUI_CFLAGS" ;;
-esac
 AC_SUBST(LIBGUI_CFLAGS) 
 
 tmp="`cd $srcdir/library; pwd`"
@@ -93,7 +67,6 @@ cd ${here}
 if test "${TCL_SRC_DIR}" = "${topdir}/tcl"; then
   # Using in-tree Tcl/Tk
   case "${host}" in
-    *-*-cygwin*) platDir="win" ;;
     *) platDir="unix" ;;
   esac
 

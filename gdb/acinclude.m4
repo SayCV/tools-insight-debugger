@@ -371,7 +371,7 @@ dnl Note: you must use first use SC_LOAD_TCLCONFIG!
 AC_DEFUN([CY_AC_TCL_PRIVATE_HEADERS], [
   AC_MSG_CHECKING([for Tcl private headers])
   private_dir=""
-  dir=`echo ${TCL_INCLUDE_SPEC}/tcl-private/generic | sed -e s/-I//`
+  dir=`echo ${TCL_SRC_DIR}/generic | sed -e s/-I//`
   if test -f ${dir}/tclInt.h ; then
     private_dir=${dir}
   fi
@@ -392,7 +392,7 @@ dnl Note: you must first use SC_LOAD_TKCONFIG
 AC_DEFUN([CY_AC_TK_PRIVATE_HEADERS], [
   AC_MSG_CHECKING([for Tk private headers])
   private_dir=""
-  dir=`echo ${TK_INCLUDE_SPEC}/tk-private/generic | sed -e s/-I//`
+  dir=`echo ${TK_SRC_DIR}/generic | sed -e s/-I//`
   if test -f ${dir}/tkInt.h; then
     private_dir=${dir}
   fi

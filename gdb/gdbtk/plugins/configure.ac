@@ -47,16 +47,6 @@ AC_SUBST(TCL_SHLIB_SUFFIX)
 # Since we're not using autoconf > 2.1x, we cannot use AC_CONFIG_FILES.
 make_subdirs=""
 
-# See if -mwin32 works for cygwin
-case "${host}" in
-  *cygwin*)
-    ocflags=${CFLAGS}
-    CFLAGS="${CFLAGS} -mwin32"
-    AC_TRY_COMPILE(,,,CFLAGS="${ocflags}")
-    ;;
-  *) ;;
-esac
-
 # note toplevel plugin build directory
 plugin_builddir=`pwd`
 

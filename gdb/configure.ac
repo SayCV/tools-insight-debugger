@@ -1903,13 +1903,6 @@ AC_SUBST(SER_HARDWIRE)
 
 # libreadline needs libuser32.a in a cygwin environment
 WIN32LIBS=
-if test x$gdb_cv_os_cygwin = xyes; then
-    WIN32LIBS="-luser32"
-    case "${target}" in
-	*cygwin*) WIN32LIBS="$WIN32LIBS -limagehlp"
-	;;
-    esac
-fi
 
 # The ser-tcp.c module requires sockets.
 case ${host} in
@@ -1973,7 +1966,7 @@ AC_SUBST(WIN32LIBS)
 AC_SUBST(WIN32LDAPP)
 
 case "${host}" in
-*-*-cygwin* | *-*-mingw* )
+*-*-mingw* )
     configdir="win"
     ;;
 *)
@@ -2071,12 +2064,6 @@ if test "${enable_gdbtk}" = "yes"; then
 	CONFIG_CLEAN="${CONFIG_CLEAN} clean-gdbtk"
 	CONFIG_INSTALL="${CONFIG_INSTALL} install-gdbtk"
 	CONFIG_UNINSTALL="${CONFIG_UNINSTALL} uninstall-gdbtk"
-
-	if test x$gdb_cv_os_cygwin = xyes; then
-	  WIN32LIBS="${WIN32LIBS} -lshell32 -lgdi32 -lcomdlg32 -ladvapi32"
-	  WIN32LDAPP="-Wl,--subsystem,console"
-	  CONFIG_OBS="${CONFIG_OBS} gdbres.o"
-	fi
 
         AC_CONFIG_SUBDIRS(gdbtk)
     fi

@@ -4,11 +4,7 @@
 #include <tcl.h>
 
 /* Define the functions that implement your commands as required by Tcl */
-#ifdef __CYGWIN__
-#  define EXPORT __declspec(dllexport)
-#else
-#  define EXPORT /* nothing */
-#endif
+#define EXPORT /* nothing */
 
 int extra_text (ClientData clientData,
                 Tcl_Interp *interp,
@@ -39,19 +35,3 @@ Rhabout_Init (Tcl_Interp *interp)
   Tcl_PkgProvide (interp, "RHABOUT", "1.0");
   return TCL_OK;
 }
-
-/* This is REQUIRED for cygwin */
-#ifdef __CYGWIN__
-#include <windows.h>
-#include <tclInt.h>
-
-struct _reent *_impure_ptr;
-extern struct _reent *_imp__reent_data;
-
-BOOL APIENTRY
-DllMain (HINSTANCE hInstance, DWORD reason, LPVOID reserved)
-{
-  _impure_ptr = _imp__reent_data;
-  return TRUE;
-}
-#endif

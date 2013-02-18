@@ -45,11 +45,6 @@ INSTALL_DATA = @INSTALL_DATA@
 PLUGIN_MODULE = $(PLUGIN)$(TCL_SHLIB_SUFFIX)
 
 # Must include a path to tclWinInt.h on cygwin
-ifeq ($(TCL_SHLIB_SUFFIX),.dll)
-CYGWIN_CFLAGS=-I$(srcdir)/../../../../tcl/win
-else
-CYGWIN_CFLAGS=
-endif
 GENERIC_CFLAGS = $(CFLAGS) $(TCL_SHLIB_CFLAGS) $(TCL_INCLUDES) $(CYGWIN_CFLAGS)
 ALL_CFLAGS = $(GENERIC_CFLAGS) $(PLUGIN_CFLAGS)
 
@@ -128,39 +123,6 @@ distclean: $(DISTCLEAN_TARGET)
 # Build rules for the DLL/shlib
 #
 
-ifeq ($(TCL_SHLIB_SUFFIX),.dll)
-
-# cygwin stuff
-DLLTOOL = @DLLTOOL@
-LD = @LD@
-AS = @AS@
-NM = @NM@
-
-PLUGIN_DEFS = $(PLUGIN).def
-PLUGIN_BASE = $(PLUGIN).base
-PLUGIN_EXP = $(PLUGIN).exp
-ifeq ($(PLUGIN_DLL_ENTRY),)
-PLUGIN_DLL_ENTRY = _DllMain@12
-endif
-
-$(PLUGIN_DEFS): $(PLUGIN_OBJS)
-	echo 'EXPORTS' > tmp.def
-	-for o in $(PLUGIN_OBJS) ; do \
-	  $(NM) --extern-only --defined-only $$o | sed -e 's/[^ ]* [^ ]* //' -e 's/^_//' | fgrep -v DllMain | fgrep -v impure_ptr >> tmp.def ; \
-	done
-	mv tmp.def $(PLUGIN_DEFS)
-
-$(PLUGIN_MODULE): $(PLUGIN_OBJS) $(PLUGIN_DEFS)
-	$(LD) -s --base-file $(PLUGIN_BASE) -dll -o $(PLUGIN_MODULE) $(PLUGIN_OBJS) $(ALL_SHLIB_LIBS) $(CYGWIN_DLL_LIBS) -e $(PLUGIN_DLL_ENTRY) --image-base $(PLUGIN_IMAGE_BASE)
-	$(DLLTOOL) --as=$(AS) --dllname $(PLUGIN_MODULE) --def $(PLUGIN_DEFS) --base-file $(PLUGIN_DEFS) --output-exp $(PLUGIN_EXP)
-	$(LD) -s --base-file $(PLUGIN_BASE) $(PLUGIN_EXP) -dll -o $(PLUGIN_MODULE) $(PLUGIN_OBJS) $(ALL_SHLIB_LIBS) $(CYGWIN_DLL_LIBS) -e $(PLUGIN_DLL_ENTRY) --image-base $(PLUGIN_IMAGE_BASE)
-	$(DLLTOOL) --as=$(AS) --dllname $(PLUGIN_MODULE) --def $(PLUGIN_DEFS) --base-file $(PLUGIN_BASE) --output-exp $(PLUGIN_EXP)
-	$(LD) $(PLUGIN_EXP) -dll -o $(PLUGIN_MODULE) $(PLUGIN_OBJS) $(ALL_SHLIB_LIBS) $(CYGWIN_DLL_LIBS) -e $(PLUGIN_DLL_ENTRY) --image-base $(PLUGIN_IMAGE_BASE)
-
-else
-
 # For unixen only
 $(PLUGIN_MODULE): $(PLUGIN_OBJS)
 	$(TCL_SHLIB_LD) -o $(PLUGIN_MODULE) $(PLUGIN_OBJS) $(ALL_SHLIB_LIBS)
-
-endif
