@@ -122,11 +122,12 @@
 /*
  * Define timezone for gettimeofday.
  */
-
+#if 0
 struct timezone {
     int tz_minuteswest;
     int tz_dsttime;
 };
+#endif
 
 #ifndef _TCLINT
 #include <tclInt.h>
