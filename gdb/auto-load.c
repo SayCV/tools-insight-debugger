@@ -1,6 +1,6 @@
 /* GDB routines for supporting auto-loaded scripts.
 
-   Copyright (C) 2012 Free Software Foundation, Inc.
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -35,6 +35,9 @@
 #include "gdb_vecs.h"
 #include "readline/tilde.h"
 #include "completer.h"
+#include "observer.h"
+#include "fnmatch.h"
+#include "top.h"
 
 /* The suffix of per-objfile scripts to auto-load as non-Python command files.
    E.g. When the program loads libfoo.so, look for libfoo-gdb.gdb.  */
@@ -107,6 +110,35 @@ show_auto_load_local_gdbinit (struct ui_file *file, int from_tty,
 		    value);
 }
 
+/* Directory list from which to load auto-loaded scripts.  It is not checked
+   for absolute paths but they are strongly recommended.  It is initialized by
+   _initialize_auto_load.  */
+static char *auto_load_dir;
+
+/* "set" command for the auto_load_dir configuration variable.  */
+
+static void
+set_auto_load_dir (char *args, int from_tty, struct cmd_list_element *c)
+{
+  /* Setting the variable to "" resets it to the compile time defaults.  */
+  if (auto_load_dir[0] == '\0')
+    {
+      xfree (auto_load_dir);
+      auto_load_dir = xstrdup (AUTO_LOAD_DIR);
+    }
+}
+
+/* "show" command for the auto_load_dir configuration variable.  */
+
+static void
+show_auto_load_dir (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("List of directories from which to load "
+			    "auto-loaded scripts is %s.\n"),
+		    value);
+}
+
 /* Directory list safe to hold auto-loaded files.  It is not checked for
    absolute paths but they are strongly recommended.  It is initialized by
    _initialize_auto_load.  */
@@ -117,12 +149,35 @@ static char *auto_load_safe_path;
    counterpart.  */
 static VEC (char_ptr) *auto_load_safe_path_vec;
 
+/* Expand $datadir and $debugdir in STRING according to the rules of
+   substitute_path_component.  Return vector from dirnames_to_char_ptr_vec,
+   this vector must be freed by free_char_ptr_vec by the caller.  */
+
+static VEC (char_ptr) *
+auto_load_expand_dir_vars (const char *string)
+{
+  VEC (char_ptr) *dir_vec;
+  char *s;
+
+  s = xstrdup (string);
+  substitute_path_component (&s, "$datadir", gdb_datadir);
+  substitute_path_component (&s, "$debugdir", debug_file_directory);
+
+  if (debug_auto_load && strcmp (s, string) != 0)
+    fprintf_unfiltered (gdb_stdlog,
+			_("auto-load: Expanded $-variables to \"%s\".\n"), s);
+
+  dir_vec = dirnames_to_char_ptr_vec (s);
+  xfree(s);
+
+  return dir_vec;
+}
+
 /* Update auto_load_safe_path_vec from current AUTO_LOAD_SAFE_PATH.  */
 
 static void
 auto_load_safe_path_vec_update (void)
 {
-  VEC (char_ptr) *dir_vec = NULL;
   unsigned len;
   int ix;
 
@@ -133,7 +188,7 @@ auto_load_safe_path_vec_update (void)
 
   free_char_ptr_vec (auto_load_safe_path_vec);
 
-  auto_load_safe_path_vec = dirnames_to_char_ptr_vec (auto_load_safe_path);
+  auto_load_safe_path_vec = auto_load_expand_dir_vars (auto_load_safe_path);
   len = VEC_length (char_ptr, auto_load_safe_path_vec);
 
   /* Apply tilde_expand and gdb_realpath to each AUTO_LOAD_SAFE_PATH_VEC
@@ -176,11 +231,26 @@ auto_load_safe_path_vec_update (void)
     }
 }
 
+/* Variable gdb_datadir has been set.  Update content depending on $datadir.  */
+
+static void
+auto_load_gdb_datadir_changed (void)
+{
+  auto_load_safe_path_vec_update ();
+}
+
 /* "set" command for the auto_load_safe_path configuration variable.  */
 
 static void
 set_auto_load_safe_path (char *args, int from_tty, struct cmd_list_element *c)
 {
+  /* Setting the variable to "" resets it to the compile time defaults.  */
+  if (auto_load_safe_path[0] == '\0')
+    {
+      xfree (auto_load_safe_path);
+      auto_load_safe_path = xstrdup (AUTO_LOAD_SAFE_PATH);
+    }
+
   auto_load_safe_path_vec_update ();
 }
 
@@ -190,7 +260,15 @@ static void
 show_auto_load_safe_path (struct ui_file *file, int from_tty,
 			  struct cmd_list_element *c, const char *value)
 {
-  if (*value == 0)
+  const char *cs;
+
+  /* Check if user has entered either "/" or for example ":".
+     But while more complicate content like ":/foo" would still also
+     permit any location do not hide those.  */
+
+  for (cs = value; *cs && (*cs == DIRNAME_SEPARATOR || IS_DIR_SEPARATOR (*cs));
+       cs++);
+  if (*cs == 0)
     fprintf_filtered (file, _("Auto-load files are safe to load from any "
 			      "directory.\n"));
   else
@@ -209,8 +287,9 @@ add_auto_load_safe_path (char *args, int from_tty)
 
   if (args == NULL || *args == 0)
     error (_("\
-Adding empty directory element disables the auto-load safe-path security.  \
-Use 'set auto-load safe-path' instead if you mean that."));
+Directory argument required.\n\
+Use 'set auto-load safe-path /' for disabling the auto-load safe-path security.\
+"));
 
   s = xstrprintf ("%s%c%s", auto_load_safe_path, DIRNAME_SEPARATOR, args);
   xfree (auto_load_safe_path);
@@ -219,21 +298,85 @@ Use 'set auto-load safe-path' instead if you mean that."));
   auto_load_safe_path_vec_update ();
 }
 
-/* Return 1 if FILENAME is equal to DIR or if FILENAME belongs to the
-   subdirectory DIR.  Return 0 otherwise.  gdb_realpath normalization is never
-   done here.  */
+/* Implementation for filename_is_in_pattern overwriting the caller's FILENAME
+   and PATTERN.  */
+
+static int
+filename_is_in_pattern_1 (char *filename, char *pattern)
+{
+  size_t pattern_len = strlen (pattern);
+  size_t filename_len = strlen (filename);
+
+  if (debug_auto_load)
+    fprintf_unfiltered (gdb_stdlog, _("auto-load: Matching file \"%s\" "
+				      "to pattern \"%s\"\n"),
+			filename, pattern);
+
+  /* Trim trailing slashes ("/") from PATTERN.  Even for "d:\" paths as
+     trailing slashes are trimmed also from FILENAME it still matches
+     correctly.  */
+  while (pattern_len && IS_DIR_SEPARATOR (pattern[pattern_len - 1]))
+    pattern_len--;
+  pattern[pattern_len] = '\0';
+
+  /* Ensure auto_load_safe_path "/" matches any FILENAME.  On MS-Windows
+     platform FILENAME even after gdb_realpath does not have to start with
+     IS_DIR_SEPARATOR character, such as the 'C:\x.exe' filename.  */
+  if (pattern_len == 0)
+    {
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog,
+			    _("auto-load: Matched - empty pattern\n"));
+      return 1;
+    }
+
+  for (;;)
+    {
+      /* Trim trailing slashes ("/").  PATTERN also has slashes trimmed the
+         same way so they will match.  */
+      while (filename_len && IS_DIR_SEPARATOR (filename[filename_len - 1]))
+	filename_len--;
+      filename[filename_len] = '\0';
+      if (filename_len == 0)
+	{
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog,
+				_("auto-load: Not matched - pattern \"%s\".\n"),
+				pattern);
+	  return 0;
+	}
+
+      if (gdb_filename_fnmatch (pattern, filename, FNM_FILE_NAME | FNM_NOESCAPE)
+	  == 0)
+	{
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Matched - file "
+					      "\"%s\" to pattern \"%s\".\n"),
+				filename, pattern);
+	  return 1;
+	}
+
+      /* Trim trailing FILENAME component.  */
+      while (filename_len > 0 && !IS_DIR_SEPARATOR (filename[filename_len - 1]))
+	filename_len--;
+    }
+}
+
+/* Return 1 if FILENAME matches PATTERN or if FILENAME resides in
+   a subdirectory of a directory that matches PATTERN.  Return 0 otherwise.
+   gdb_realpath normalization is never done here.  */
 
 static ATTRIBUTE_PURE int
-filename_is_in_dir (const char *filename, const char *dir)
+filename_is_in_pattern (const char *filename, const char *pattern)
 {
-  size_t dir_len = strlen (dir);
+  char *filename_copy, *pattern_copy;
 
-  while (dir_len && IS_DIR_SEPARATOR (dir[dir_len - 1]))
-    dir_len--;
+  filename_copy = alloca (strlen (filename) + 1);
+  strcpy (filename_copy, filename);
+  pattern_copy = alloca (strlen (pattern) + 1);
+  strcpy (pattern_copy, pattern);
 
-  return (filename_ncmp (dir, filename, dir_len) == 0
-	  && (IS_DIR_SEPARATOR (filename[dir_len])
-	      || filename[dir_len] == '\0'));
+  return filename_is_in_pattern_1 (filename_copy, pattern_copy);
 }
 
 /* Return 1 if FILENAME belongs to one of directory components of
@@ -246,14 +389,15 @@ static int
 filename_is_in_auto_load_safe_path_vec (const char *filename,
 					char **filename_realp)
 {
-  char *dir;
+  char *pattern;
   int ix;
 
-  for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, dir); ++ix)
-    if (*filename_realp == NULL && filename_is_in_dir (filename, dir))
+  for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, pattern);
+       ++ix)
+    if (*filename_realp == NULL && filename_is_in_pattern (filename, pattern))
       break;
   
-  if (dir == NULL)
+  if (pattern == NULL)
     {
       if (*filename_realp == NULL)
 	{
@@ -266,18 +410,18 @@ filename_is_in_auto_load_safe_path_vec (const char *filename,
 	}
 
       if (strcmp (*filename_realp, filename) != 0)
-	for (ix = 0; VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, dir);
-	     ++ix)
-	  if (filename_is_in_dir (*filename_realp, dir))
+	for (ix = 0;
+	     VEC_iterate (char_ptr, auto_load_safe_path_vec, ix, pattern); ++ix)
+	  if (filename_is_in_pattern (*filename_realp, pattern))
 	    break;
     }
 
-  if (dir != NULL)
+  if (pattern != NULL)
     {
       if (debug_auto_load)
 	fprintf_unfiltered (gdb_stdlog, _("auto-load: File \"%s\" matches "
 					  "directory \"%s\".\n"),
-			    filename, dir);
+			    filename, pattern);
       return 1;
     }
 
@@ -297,6 +441,7 @@ file_is_auto_load_safe (const char *filename, const char *debug_fmt, ...)
 {
   char *filename_real = NULL;
   struct cleanup *back_to;
+  static int advice_printed = 0;
 
   if (debug_auto_load)
     {
@@ -325,6 +470,30 @@ file_is_auto_load_safe (const char *filename, const char *debug_fmt, ...)
   warning (_("File \"%s\" auto-loading has been declined by your "
 	     "`auto-load safe-path' set to \"%s\"."),
 	   filename_real, auto_load_safe_path);
+
+  if (!advice_printed)
+    {
+      const char *homedir = getenv ("HOME");
+      char *homeinit;
+
+      if (homedir == NULL)
+	homedir = "$HOME";
+      homeinit = xstrprintf ("%s/%s", homedir, gdbinit);
+      make_cleanup (xfree, homeinit);
+
+      printf_filtered (_("\
+To enable execution of this file add\n\
+\tadd-auto-load-safe-path %s\n\
+line to your configuration file \"%s\".\n\
+To completely disable this security protection add\n\
+\tset auto-load safe-path /\n\
+line to your configuration file \"%s\".\n\
+For more information about this security protection see the\n\
+\"Auto-loading safe path\" section in the GDB manual.  E.g., run from the shell:\n\
+\tinfo \"(gdb)Auto-loading safe path\"\n"),
+		       filename_real, homeinit, homeinit);
+      advice_printed = 1;
+    }
 
   do_cleanups (back_to);
   return 0;
@@ -549,57 +718,67 @@ clear_section_scripts (void)
     }
 }
 
-/* Look for the auto-load script in LANGUAGE associated with OBJFILE and load
-   it.  */
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE where
+   OBJFILE's gdb_realpath is REALNAME and load it.  Return 1 if we found any
+   matching script, return 0 otherwise.  */
 
-void
-auto_load_objfile_script (struct objfile *objfile,
-			  const struct script_language *language)
+static int
+auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
+			    const struct script_language *language)
 {
-  char *realname;
   char *filename, *debugfile;
-  int len;
+  int len, retval;
   FILE *input;
   struct cleanup *cleanups;
 
-  realname = gdb_realpath (objfile->name);
   len = strlen (realname);
   filename = xmalloc (len + strlen (language->suffix) + 1);
   memcpy (filename, realname, len);
   strcpy (filename + len, language->suffix);
 
   cleanups = make_cleanup (xfree, filename);
-  make_cleanup (xfree, realname);
 
   input = fopen (filename, "r");
   debugfile = filename;
+  if (debug_auto_load)
+    fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file \"%s\" %s.\n"),
+			debugfile, input ? _("exists") : _("does not exist"));
 
-  if (!input && debug_file_directory)
+  if (!input)
     {
-      /* Also try the same file in the separate debug info directory.  */
-      debugfile = xmalloc (strlen (filename)
-			   + strlen (debug_file_directory) + 1);
-      strcpy (debugfile, debug_file_directory);
-      /* FILENAME is absolute, so we don't need a "/" here.  */
-      strcat (debugfile, filename);
+      VEC (char_ptr) *vec;
+      int ix;
+      char *dir;
 
-      make_cleanup (xfree, debugfile);
-      input = fopen (debugfile, "r");
-    }
-
-  if (!input && gdb_datadir)
-    {
       /* Also try the same file in a subdirectory of gdb's data
 	 directory.  */
-      debugfile = xmalloc (strlen (gdb_datadir) + strlen (filename)
-			   + strlen ("/auto-load") + 1);
-      strcpy (debugfile, gdb_datadir);
-      strcat (debugfile, "/auto-load");
-      /* FILENAME is absolute, so we don't need a "/" here.  */
-      strcat (debugfile, filename);
 
-      make_cleanup (xfree, debugfile);
-      input = fopen (debugfile, "r");
+      vec = auto_load_expand_dir_vars (auto_load_dir);
+      make_cleanup_free_char_ptr_vec (vec);
+
+      if (debug_auto_load)
+	fprintf_unfiltered (gdb_stdlog, _("auto-load: Searching 'set auto-load "
+					  "scripts-directory' path \"%s\".\n"),
+			    auto_load_dir);
+
+      for (ix = 0; VEC_iterate (char_ptr, vec, ix, dir); ++ix)
+	{
+	  debugfile = xmalloc (strlen (dir) + strlen (filename) + 1);
+	  strcpy (debugfile, dir);
+
+	  /* FILENAME is absolute, so we don't need a "/" here.  */
+	  strcat (debugfile, filename);
+
+	  make_cleanup (xfree, debugfile);
+	  input = fopen (debugfile, "r");
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file "
+					      "\"%s\" %s.\n"),
+				debugfile,
+				input ? _("exists") : _("does not exist"));
+	  if (input != NULL)
+	    break;
+	}
     }
 
   if (input)
@@ -612,6 +791,44 @@ auto_load_objfile_script (struct objfile *objfile,
 	 and these scripts are required to be idempotent under multiple
 	 loads anyway.  */
       language->source_script_for_objfile (objfile, input, debugfile);
+
+      retval = 1;
+    }
+  else
+    retval = 0;
+
+  do_cleanups (cleanups);
+  return retval;
+}
+
+/* Look for the auto-load script in LANGUAGE associated with OBJFILE and load
+   it.  */
+
+void
+auto_load_objfile_script (struct objfile *objfile,
+			  const struct script_language *language)
+{
+  char *realname = gdb_realpath (objfile->name);
+  struct cleanup *cleanups = make_cleanup (xfree, realname);
+
+  if (!auto_load_objfile_script_1 (objfile, realname, language))
+    {
+      /* For Windows/DOS .exe executables, strip the .exe suffix, so that
+	 FOO-gdb.gdb could be used for FOO.exe, and try again.  */
+
+      size_t len = strlen (realname);
+      const size_t lexe = sizeof (".exe") - 1;
+
+      if (len > lexe && strcasecmp (realname + len - lexe, ".exe") == 0)
+	{
+	  len -= lexe;
+	  realname[len] = '\0';
+	  if (debug_auto_load)
+	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Stripped .exe suffix, "
+					      "retrying with \"%s\".\n"),
+				realname);
+	  auto_load_objfile_script_1 (objfile, realname, language);
+	}
     }
 
   do_cleanups (cleanups);
@@ -760,11 +977,9 @@ auto_load_info_scripts (char *pattern, int from_tty,
     {
       struct collect_matching_scripts_data data = { &scripts, language };
 
-      immediate_quit++;
       /* Pass a pointer to scripts as VEC_safe_push can realloc space.  */
       htab_traverse_noresize (pspace_info->loaded_scripts,
 			      collect_matching_scripts, &data);
-      immediate_quit--;
     }
 
   nr_scripts = VEC_length (loaded_script_ptr, scripts);
@@ -868,7 +1083,7 @@ set_auto_load_cmd (char *args, int from_tty)
     if (list->var_type == var_boolean)
       {
 	gdb_assert (list->type == set_cmd);
-	do_setshow_command (args, from_tty, list);
+	do_set_command (args, from_tty, list);
       }
 }
 
@@ -974,9 +1189,11 @@ void
 _initialize_auto_load (void)
 {
   struct cmd_list_element *cmd;
+  char *scripts_directory_help;
 
   auto_load_pspace_data
-    = register_program_space_data_with_cleanup (auto_load_pspace_data_cleanup);
+    = register_program_space_data_with_cleanup (NULL,
+						auto_load_pspace_data_cleanup);
 
   observer_attach_new_objfile (auto_load_new_objfile);
 
@@ -1015,22 +1232,59 @@ This options has security implications for untrusted inferiors."),
 Usage: info auto-load local-gdbinit"),
 	   auto_load_info_cmdlist_get ());
 
-  auto_load_safe_path = xstrdup (DEFAULT_AUTO_LOAD_SAFE_PATH);
+  auto_load_dir = xstrdup (AUTO_LOAD_DIR);
+  scripts_directory_help = xstrprintf (
+#ifdef HAVE_PYTHON
+				       _("\
+Automatically loaded Python scripts (named OBJFILE%s) and GDB scripts\n\
+(named OBJFILE%s) are located in one of the directories listed by this\n\
+option.\n\
+%s"),
+				       GDBPY_AUTO_FILE_NAME,
+#else
+				       _("\
+Automatically loaded GDB scripts (named OBJFILE%s) are located in one\n\
+of the directories listed by this option.\n\
+%s"),
+#endif
+				       GDB_AUTO_FILE_NAME,
+				       _("\
+This option is ignored for the kinds of scripts \
+having 'set auto-load ... off'.\n\
+Directories listed here need to be present also \
+in the 'set auto-load safe-path'\n\
+option."));
+  add_setshow_optional_filename_cmd ("scripts-directory", class_support,
+				     &auto_load_dir, _("\
+Set the list of directories from which to load auto-loaded scripts."), _("\
+Show the list of directories from which to load auto-loaded scripts."),
+				     scripts_directory_help,
+				     set_auto_load_dir, show_auto_load_dir,
+				     auto_load_set_cmdlist_get (),
+				     auto_load_show_cmdlist_get ());
+  xfree (scripts_directory_help);
+
+  auto_load_safe_path = xstrdup (AUTO_LOAD_SAFE_PATH);
   auto_load_safe_path_vec_update ();
   add_setshow_optional_filename_cmd ("safe-path", class_support,
 				     &auto_load_safe_path, _("\
-Set the list of directories from which it is safe to auto-load files."), _("\
-Show the list of directories from which it is safe to auto-load files."), _("\
+Set the list of files and directories that are safe for auto-loading."), _("\
+Show the list of files and directories that are safe for auto-loading."), _("\
 Various files loaded automatically for the 'set auto-load ...' options must\n\
 be located in one of the directories listed by this option.  Warning will be\n\
-printed and file will not be used otherwise.  Use empty string (or even\n\
-empty directory entry) to allow any file for the 'set auto-load ...' options.\n\
+printed and file will not be used otherwise.\n\
+You can mix both directory and filename entries.\n\
+Setting this parameter to an empty list resets it to its default value.\n\
+Setting this parameter to '/' (without the quotes) allows any file\n\
+for the 'set auto-load ...' options.  Each path entry can be also shell\n\
+wildcard pattern; '*' does not match directory separator.\n\
 This option is ignored for the kinds of files having 'set auto-load ... off'.\n\
 This options has security implications for untrusted inferiors."),
 				     set_auto_load_safe_path,
 				     show_auto_load_safe_path,
 				     auto_load_set_cmdlist_get (),
 				     auto_load_show_cmdlist_get ());
+  observer_attach_gdb_datadir_changed (auto_load_gdb_datadir_changed);
 
   cmd = add_cmd ("add-auto-load-safe-path", class_support,
 		 add_auto_load_safe_path,

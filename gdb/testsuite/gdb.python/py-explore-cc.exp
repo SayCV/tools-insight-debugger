@@ -1,4 +1,4 @@
-# Copyright (C) 2012 Free Software Foundation, Inc.
+# Copyright (C) 2012-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,9 +18,7 @@
 
 if { [skip_cplus_tests] } { continue }
 
-set testfile "py-explore"
-set srcfile ${testfile}.cc
-set binfile ${objdir}/${subdir}/${testfile}
+standard_testfile py-explore.cc
 
 if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
     return -1

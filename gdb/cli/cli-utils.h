@@ -1,6 +1,6 @@
 /* CLI utilities.
 
-   Copyright (c) 2011-2012 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -113,5 +113,11 @@ extern char *remove_trailing_whitespace (const char *start, char *s);
    argument was found, or an xmalloc'd string.  */
 
 extern char *extract_arg (char **arg);
+
+/* A helper function that looks for an argument at the start of a
+   string.  The argument must also either be at the end of the string,
+   or be followed by whitespace.  Returns 1 if it finds the argument,
+   0 otherwise.  If the argument is found, it updates *STR.  */
+extern int check_for_argument (char **str, char *arg, int arg_len);
 
 #endif /* CLI_UTILS_H */

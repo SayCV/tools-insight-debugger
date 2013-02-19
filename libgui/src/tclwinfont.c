@@ -50,7 +50,7 @@
 /* Implement the ide_win_choose_font procedure.  */
 
 static int
-win_choose_font (ClientData cd, Tcl_Interp *interp, int argc,CONST84 char **argv)
+win_choose_font (ClientData cd, Tcl_Interp *interp, int argc, CONST84 char **argv)
 {
   CONST84 char *deffont;
   Tk_Window parent;
@@ -154,7 +154,7 @@ win_choose_font (ClientData cd, Tcl_Interp *interp, int argc,CONST84 char **argv
     }
 
   oldMode = Tcl_SetServiceMode(TCL_SERVICE_ALL);
-  if (! ChooseFontA (&cf))
+  if (!ChooseFontA (&cf))
     {
       DWORD code;
 

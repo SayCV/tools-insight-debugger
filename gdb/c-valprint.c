@@ -1,7 +1,6 @@
 /* Support for printing C values for GDB, the GNU debugger.
 
-   Copyright (C) 1986, 1988-1989, 1991-2001, 2003, 2005-2012 Free
-   Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -145,7 +144,6 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
   struct type *elttype, *unresolved_elttype;
   struct type *unresolved_type = type;
   unsigned eltlen;
-  LONGEST val;
   CORE_ADDR addr;
 
   CHECK_TYPEDEF (type);
@@ -178,6 +176,8 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 				   TARGET_CHAR_BIT * embedded_offset,
 				   TARGET_CHAR_BIT * TYPE_LENGTH (type)))
 	    {
+	      int force_ellipses = 0;
+
 	      /* If requested, look for the first null char and only
 	         print elements up to it.  */
 	      if (options->stop_print_at_null)
@@ -192,12 +192,26 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 						     eltlen, byte_order) != 0);
 		       ++temp_len)
 		    ;
+
+		  /* Force LA_PRINT_STRING to print ellipses if
+		     we've printed the maximum characters and
+		     the next character is not \000.  */
+		  if (temp_len == options->print_max && temp_len < len)
+		    {
+		      ULONGEST val
+			= extract_unsigned_integer (valaddr + embedded_offset
+						    + temp_len * eltlen,
+						    eltlen, byte_order);
+		      if (val != 0)
+			force_ellipses = 1;
+		    }
+
 		  len = temp_len;
 		}
 
 	      LA_PRINT_STRING (stream, unresolved_elttype,
 			       valaddr + embedded_offset, len,
-			       NULL, 0, options);
+			       NULL, force_ellipses, options);
 	      i = len;
 	    }
 	  else
@@ -248,26 +262,34 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 	  CORE_ADDR addr
 	    = extract_typed_address (valaddr + embedded_offset, type);
 
-	  print_function_pointer_address (gdbarch, addr, stream,
-					  options->addressprint);
+	  print_function_pointer_address (options, gdbarch, addr, stream);
 	  break;
 	}
       unresolved_elttype = TYPE_TARGET_TYPE (type);
       elttype = check_typedef (unresolved_elttype);
 	{
+	  int want_space;
+
 	  addr = unpack_pointer (type, valaddr + embedded_offset);
 	print_unpacked_pointer:
+
+	  want_space = 0;
 
 	  if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
 	    {
 	      /* Try to print what function it points to.  */
-	      print_function_pointer_address (gdbarch, addr, stream,
-					      options->addressprint);
+	      print_function_pointer_address (options, gdbarch, addr, stream);
 	      return;
 	    }
 
-	  if (options->addressprint)
-	    fputs_filtered (paddress (gdbarch, addr), stream);
+	  if (options->symbol_print)
+	    want_space = print_address_demangle (options, gdbarch, addr,
+						 stream, demangle);
+	  else if (options->addressprint)
+	    {
+	      fputs_filtered (paddress (gdbarch, addr), stream);
+	      want_space = 1;
+	    }
 
 	  /* For a pointer to a textual type, also print the string
 	     pointed to, unless pointer is null.  */
@@ -276,6 +298,8 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 				      options->format)
 	      && addr != 0)
 	    {
+	      if (want_space)
+		fputs_filtered (" ", stream);
 	      i = val_print_string (unresolved_elttype, NULL,
 				    addr, -1,
 				    stream, options);
@@ -286,23 +310,32 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 	      CORE_ADDR vt_address = unpack_pointer (type,
 						     valaddr
 						     + embedded_offset);
-
 	      struct minimal_symbol *msymbol =
 	      lookup_minimal_symbol_by_pc (vt_address);
-	      if ((msymbol != NULL)
+
+	      /* If 'symbol_print' is set, we did the work above.  */
+	      if (!options->symbol_print
+		  && (msymbol != NULL)
 		  && (vt_address == SYMBOL_VALUE_ADDRESS (msymbol)))
 		{
+		  if (want_space)
+		    fputs_filtered (" ", stream);
 		  fputs_filtered (" <", stream);
 		  fputs_filtered (SYMBOL_PRINT_NAME (msymbol), stream);
 		  fputs_filtered (">", stream);
+		  want_space = 1;
 		}
+
 	      if (vt_address && options->vtblprint)
 		{
 		  struct value *vt_val;
 		  struct symbol *wsym = (struct symbol *) NULL;
 		  struct type *wtype;
 		  struct block *block = (struct block *) NULL;
-		  int is_this_fld;
+		  struct field_of_this_result is_this_fld;
+
+		  if (want_space)
+		    fputs_filtered (" ", stream);
 
 		  if (msymbol != NULL)
 		    wsym = lookup_symbol (SYMBOL_LINKAGE_NAME (msymbol),
@@ -354,8 +387,7 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 	  CORE_ADDR addr
 	    = extract_typed_address (valaddr + offset, field_type);
 
-	  print_function_pointer_address (gdbarch, addr, stream,
-					  options->addressprint);
+	  print_function_pointer_address (options, gdbarch, addr, stream);
 	}
       else
 	cp_print_value_fields_rtti (type, valaddr,

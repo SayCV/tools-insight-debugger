@@ -1,6 +1,6 @@
 /* Interface between GDB and target environments, including files and processes
 
-   Copyright (C) 1990-2012 Free Software Foundation, Inc.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.  Written by John Gilmore.
 
@@ -164,7 +164,7 @@ struct target_waitstatus
     union
       {
 	int integer;
-	enum target_signal sig;
+	enum gdb_signal sig;
 	ptid_t related_pid;
 	char *execd_pathname;
 	int syscall_number;
@@ -197,6 +197,10 @@ struct syscall
 /* Return a pretty printed form of target_waitstatus.
    Space for the result is malloc'd, caller must free.  */
 extern char *target_waitstatus_to_string (const struct target_waitstatus *);
+
+/* Return a pretty printed form of TARGET_OPTIONS.
+   Space for the result is malloc'd, caller must free.  */
+extern char *target_options_to_string (int target_options);
 
 /* Possible types of events that the inferior handler will have to
    deal with.  */
@@ -419,7 +423,7 @@ struct target_ops
     void (*to_post_attach) (int);
     void (*to_detach) (struct target_ops *ops, char *, int);
     void (*to_disconnect) (struct target_ops *, char *, int);
-    void (*to_resume) (struct target_ops *, ptid_t, int, enum target_signal);
+    void (*to_resume) (struct target_ops *, ptid_t, int, enum gdb_signal);
     ptid_t (*to_wait) (struct target_ops *,
 		       ptid_t, struct target_waitstatus *, int);
     void (*to_fetch_registers) (struct target_ops *, struct regcache *, int);
@@ -672,6 +676,10 @@ struct target_ops
        end?  */
     int (*to_supports_evaluation_of_breakpoint_conditions) (void);
 
+    /* Does this target support evaluation of breakpoint commands on its
+       end?  */
+    int (*to_can_run_breakpoint_commands) (void);
+
     /* Determine current architecture of thread PTID.
 
        The target is supposed to determine the architecture of the code where
@@ -679,9 +687,9 @@ struct target_ops
        to_thread_architecture would return SPU, otherwise PPC32 or PPC64).
        This is architecture used to perform decr_pc_after_break adjustment,
        and also determines the frame architecture of the innermost frame.
-       ptrace operations need to operate according to target_gdbarch.
+       ptrace operations need to operate according to target_gdbarch ().
 
-       The default implementation always returns target_gdbarch.  */
+       The default implementation always returns target_gdbarch ().  */
     struct gdbarch *(*to_thread_architecture) (struct target_ops *, ptid_t);
 
     /* Determine current address space of thread PTID.
@@ -920,12 +928,18 @@ extern void target_detach (char *, int);
 
 extern void target_disconnect (char *, int);
 
-/* Resume execution of the target process PTID.  STEP says whether to
-   single-step or to run free; SIGGNAL is the signal to be given to
-   the target, or TARGET_SIGNAL_0 for no signal.  The caller may not
-   pass TARGET_SIGNAL_DEFAULT.  */
+/* Resume execution of the target process PTID (or a group of
+   threads).  STEP says whether to single-step or to run free; SIGGNAL
+   is the signal to be given to the target, or GDB_SIGNAL_0 for no
+   signal.  The caller may not pass GDB_SIGNAL_DEFAULT.  A specific
+   PTID means `step/resume only this process id'.  A wildcard PTID
+   (all threads, or all threads of process) means `step/resume
+   INFERIOR_PTID, and let other threads (for which the wildcard PTID
+   matches) resume with their 'thread->suspend.stop_signal' signal
+   (usually GDB_SIGNAL_0) if it is in "pass" state, or with no signal
+   if in "no pass" state.  */
 
-extern void target_resume (ptid_t ptid, int step, enum target_signal signal);
+extern void target_resume (ptid_t ptid, int step, enum gdb_signal signal);
 
 /* Wait for process pid to do something.  PTID = -1 to wait for any
    pid to do something.  Return pid of child, or -1 in case of error;
@@ -962,9 +976,12 @@ extern void target_store_registers (struct regcache *regcache, int regs);
 
 struct address_space *target_thread_address_space (ptid_t);
 
-/* Implement the "info proc" command.  */
+/* Implement the "info proc" command.  This returns one if the request
+   was handled, and zero otherwise.  It can also throw an exception if
+   an error was encountered while attempting to handle the
+   request.  */
 
-void target_info_proc (char *, enum info_proc_what);
+int target_info_proc (char *, enum info_proc_what);
 
 /* Returns true if this target can debug multiple processes
    simultaneously.  */
@@ -991,20 +1008,27 @@ int target_supports_disable_randomization (void);
 #define target_supports_evaluation_of_breakpoint_conditions() \
   (*current_target.to_supports_evaluation_of_breakpoint_conditions) ()
 
+/* Returns true if this target can handle breakpoint commands
+   on its end.  */
+
+#define target_can_run_breakpoint_commands() \
+  (*current_target.to_can_run_breakpoint_commands) ()
+
 /* Invalidate all target dcaches.  */
 extern void target_dcache_invalidate (void);
 
 extern int target_read_string (CORE_ADDR, char **, int, int *);
 
-extern int target_read_memory (CORE_ADDR memaddr, gdb_byte *myaddr, int len);
+extern int target_read_memory (CORE_ADDR memaddr, gdb_byte *myaddr,
+			       ssize_t len);
 
-extern int target_read_stack (CORE_ADDR memaddr, gdb_byte *myaddr, int len);
+extern int target_read_stack (CORE_ADDR memaddr, gdb_byte *myaddr, ssize_t len);
 
 extern int target_write_memory (CORE_ADDR memaddr, const gdb_byte *myaddr,
-				int len);
+				ssize_t len);
 
 extern int target_write_raw_memory (CORE_ADDR memaddr, const gdb_byte *myaddr,
-				    int len);
+				    ssize_t len);
 
 /* Fetches the target's memory map.  If one is found it is sorted
    and returned, after some consistency checking.  Otherwise, NULL
@@ -1059,16 +1083,6 @@ enum flash_preserve_mode
 int target_write_memory_blocks (VEC(memory_write_request_s) *requests,
 				enum flash_preserve_mode preserve_flash_p,
 				void (*progress_cb) (ULONGEST, void *));
-
-/* From infrun.c.  */
-
-extern int inferior_has_forked (ptid_t pid, ptid_t *child_pid);
-
-extern int inferior_has_vforked (ptid_t pid, ptid_t *child_pid);
-
-extern int inferior_has_execd (ptid_t pid, char **execd_pathname);
-
-extern int inferior_has_called_syscall (ptid_t pid, int *syscall_number);
 
 /* Print a line about the current target.  */
 
@@ -1254,7 +1268,7 @@ void target_mourn_inferior (void);
 /* Set list of signals to be handled in the target.
 
    PASS_SIGNALS is an array of size NSIG, indexed by target signal number
-   (enum target_signal).  For every signal whose entry in this array is
+   (enum gdb_signal).  For every signal whose entry in this array is
    non-zero, the target is allowed -but not required- to skip reporting
    arrival of the signal to the GDB core by returning from target_wait,
    and to pass the signal directly to the inferior instead.
@@ -1269,7 +1283,7 @@ extern void target_pass_signals (int nsig, unsigned char *pass_signals);
    directly maps to the "handle SIGNAL pass/nopass" setting.
 
    PROGRAM_SIGNALS is an array of size NSIG, indexed by target signal
-   number (enum target_signal).  For every signal whose entry in this
+   number (enum gdb_signal).  For every signal whose entry in this
    array is non-zero, the target is allowed to pass the signal to the
    inferior.  Signals not present in the array shall be silently
    discarded.  This does not influence whether to pass signals to the
@@ -1783,6 +1797,12 @@ struct target_section
 
     struct bfd_section *the_bfd_section;
 
+    /* A given BFD may appear multiple times in the target section
+       list, so each BFD is associated with a given key.  The key is
+       just some convenient pointer that can be used to differentiate
+       the BFDs.  These are managed only by convention.  */
+    void *key;
+
     bfd *bfd;			/* BFD file pointer */
   };
 
@@ -1857,10 +1877,6 @@ extern int baud_rate;
 extern int remote_timeout;
 
 
-/* Functions for helping to write a native target.  */
-
-/* This is for native targets which use a unix/POSIX-style waitstatus.  */
-extern void store_waitstatus (struct target_waitstatus *, int);
 
 /* Set the show memory breakpoints mode to show, and installs a cleanup
    to restore it back to the current value.  */

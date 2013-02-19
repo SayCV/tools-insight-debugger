@@ -1,4 +1,4 @@
-# Copyright 2009-2012 Free Software Foundation, Inc.
+# Copyright 2009-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,10 +24,8 @@ if { [is_remote target] } then {
     continue
 }
 
-set testfile "non-ldr-exc-3"
-set srcfile ${testfile}.c
+standard_testfile
 set executable ${testfile}
-set binfile ${objdir}/${subdir}/${executable}
 
 if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debug}] != "" } {
     return -1

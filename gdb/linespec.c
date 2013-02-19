@@ -1,6 +1,6 @@
 /* Parser for linespec for the GNU debugger, GDB.
 
-   Copyright (C) 1986-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -43,6 +43,7 @@
 #include "cli/cli-utils.h"
 #include "filenames.h"
 #include "ada-lang.h"
+#include "stack.h"
 
 typedef struct symtab *symtab_p;
 DEF_VEC_P (symtab_p);
@@ -109,7 +110,7 @@ struct linespec
      currently precludes the use of other members.  */
 
   /* The expression entered by the user.  */
-  char *expression;
+  const char *expression;
 
   /* The resulting PC expression derived from evaluating EXPRESSION.  */
   CORE_ADDR expr_pc;
@@ -117,7 +118,7 @@ struct linespec
   /* Any specified file symtabs.  */
 
   /* The user-supplied source filename or NULL if none was specified.  */
-  char *source_filename;
+  const char *source_filename;
 
   /* The list of symtabs to search to which to limit the search.  May not
      be NULL.  If SOURCE_FILENAME is NULL (no user-specified filename),
@@ -129,7 +130,7 @@ struct linespec
 
   /* The user-specified function name.  If no function name was
      supplied, this may be NULL.  */
-  char *function_name;
+  const char *function_name;
 
   /* A list of matching function symbols and minimal symbols.  Both lists
      may be NULL if no matching symbols were found.  */
@@ -139,7 +140,7 @@ struct linespec
   /* The name of a label and matching symbols.  */
 
   /* The user-specified label name.  */
-  char *label_name;
+  const char *label_name;
 
   /* A structure of matching label symbols and the corresponding
      function symbol in which the label was found.  Both may be NULL
@@ -285,6 +286,11 @@ struct ls_parser
   /* Is the entire linespec quote-enclosed?  */
   int is_quote_enclosed;
 
+  /* Is a keyword syntactically valid at this point?
+     In, e.g., "break thread thread 1", the leading "keyword" must not
+     be interpreted as such.  */
+  int keyword_ok;
+
   /* The state of the parse.  */
   struct linespec_state state;
 #define PARSER_STATE(PPTR) (&(PPTR)->state)
@@ -313,11 +319,11 @@ static VEC (symbolp) *find_label_symbols (struct linespec_state *self,
 					  VEC (symbolp) **label_funcs_ret,
 					  const char *name);
 
-void find_linespec_symbols (struct linespec_state *self,
-			    VEC (symtab_p) *file_symtabs,
-			    const char *name,
-			    VEC (symbolp) **symbols,
-			    VEC (minsym_and_objfile_d) **minsyms);
+static void find_linespec_symbols (struct linespec_state *self,
+				   VEC (symtab_p) *file_symtabs,
+				   const char *name,
+				   VEC (symbolp) **symbols,
+				   VEC (minsym_and_objfile_d) **minsyms);
 
 static struct line_offset
      linespec_parse_variable (struct linespec_state *self,
@@ -365,31 +371,42 @@ static const char *const linespec_quote_characters = "\"\'";
 /* Lexer functions.  */
 
 /* Lex a number from the input in PARSER.  This only supports
-   decimal numbers.  */
+   decimal numbers.
 
-static linespec_token
-linespec_lexer_lex_number (linespec_parser *parser)
+   Return true if input is decimal numbers.  Return false if not.  */
+
+static int
+linespec_lexer_lex_number (linespec_parser *parser, linespec_token *tokenp)
 {
-  linespec_token token;
-
-  token.type = LSTOKEN_NUMBER;
-  LS_TOKEN_STOKEN (token).length = 0;
-  LS_TOKEN_STOKEN (token).ptr = PARSER_STREAM (parser);
+  tokenp->type = LSTOKEN_NUMBER;
+  LS_TOKEN_STOKEN (*tokenp).length = 0;
+  LS_TOKEN_STOKEN (*tokenp).ptr = PARSER_STREAM (parser);
 
   /* Keep any sign at the start of the stream.  */
   if (*PARSER_STREAM (parser) == '+' || *PARSER_STREAM (parser) == '-')
     {
-      ++LS_TOKEN_STOKEN (token).length;
+      ++LS_TOKEN_STOKEN (*tokenp).length;
       ++(PARSER_STREAM (parser));
     }
 
   while (isdigit (*PARSER_STREAM (parser)))
     {
-      ++LS_TOKEN_STOKEN (token).length;
+      ++LS_TOKEN_STOKEN (*tokenp).length;
       ++(PARSER_STREAM (parser));
     }
 
-  return token;
+  /* If the next character in the input buffer is not a space, comma,
+     quote, or colon, this input does not represent a number.  */
+  if (*PARSER_STREAM (parser) != '\0'
+      && !isspace (*PARSER_STREAM (parser)) && *PARSER_STREAM (parser) != ','
+      && *PARSER_STREAM (parser) != ':'
+      && !strchr (linespec_quote_characters, *PARSER_STREAM (parser)))
+    {
+      PARSER_STREAM (parser) = LS_TOKEN_STOKEN (*tokenp).ptr;
+      return 0;
+    }
+
+  return 1;
 }
 
 /* Does P represent one of the keywords?  If so, return
@@ -595,6 +612,10 @@ linespec_lexer_lex_string (linespec_parser *parser)
 	  if (isspace (*PARSER_STREAM (parser)))
 	    {
 	      p = skip_spaces (PARSER_STREAM (parser));
+	      /* When we get here we know we've found something followed by
+		 a space (we skip over parens and templates below).
+		 So if we find a keyword now, we know it is a keyword and not,
+		 say, a function name.  */
 	      if (linespec_lexer_lex_keyword (p) != NULL)
 		{
 		  LS_TOKEN_STOKEN (token).ptr = start;
@@ -704,8 +725,10 @@ linespec_lexer_lex_one (linespec_parser *parser)
       /* Skip any whitespace.  */
       PARSER_STREAM (parser) = skip_spaces (PARSER_STREAM (parser));
 
-      /* Check for a keyword.  */
-      keyword = linespec_lexer_lex_keyword (PARSER_STREAM (parser));
+      /* Check for a keyword, they end the linespec.  */
+      keyword = NULL;
+      if (parser->keyword_ok)
+	keyword = linespec_lexer_lex_keyword (PARSER_STREAM (parser));
       if (keyword != NULL)
 	{
 	  parser->lexer.current.type = LSTOKEN_KEYWORD;
@@ -723,7 +746,8 @@ linespec_lexer_lex_one (linespec_parser *parser)
 	case '+': case '-':
 	case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
-          parser->lexer.current = linespec_lexer_lex_number (parser);
+           if (!linespec_lexer_lex_number (parser, &(parser->lexer.current)))
+	     parser->lexer.current = linespec_lexer_lex_string (parser);
           break;
 
 	case ':':
@@ -809,13 +833,16 @@ add_sal_to_sals_basic (struct symtabs_and_lines *sals,
 
 /* Add SAL to SALS, and also update SELF->CANONICAL_NAMES to reflect
    the new sal, if needed.  If not NULL, SYMNAME is the name of the
-   symbol to use when constructing the new canonical name.  */
+   symbol to use when constructing the new canonical name.
+
+   If LITERAL_CANONICAL is non-zero, SYMNAME will be used as the
+   canonical name for the SAL.  */
 
 static void
 add_sal_to_sals (struct linespec_state *self,
 		 struct symtabs_and_lines *sals,
 		 struct symtab_and_line *sal,
-		 const char *symname)
+		 const char *symname, int literal_canonical)
 {
   add_sal_to_sals_basic (sals, sal);
 
@@ -825,22 +852,24 @@ add_sal_to_sals (struct linespec_state *self,
 
       self->canonical_names = xrealloc (self->canonical_names,
 					sals->nelts * sizeof (char *));
-      if (sal->symtab && sal->symtab->filename)
+      if (!literal_canonical && sal->symtab)
 	{
-	  char *filename = sal->symtab->filename;
+	  const char *fullname = symtab_to_fullname (sal->symtab);
 
 	  /* Note that the filter doesn't have to be a valid linespec
 	     input.  We only apply the ":LINE" treatment to Ada for
 	     the time being.  */
 	  if (symname != NULL && sal->line != 0
 	      && self->language->la_language == language_ada)
-	    canonical_name = xstrprintf ("%s:%s:%d", filename, symname,
+	    canonical_name = xstrprintf ("%s:%s:%d", fullname, symname,
 					 sal->line);
 	  else if (symname != NULL)
-	    canonical_name = xstrprintf ("%s:%s", filename, symname);
+	    canonical_name = xstrprintf ("%s:%s", fullname, symname);
 	  else
-	    canonical_name = xstrprintf ("%s:%d", filename, sal->line);
+	    canonical_name = xstrprintf ("%s:%d", fullname, sal->line);
 	}
+      else if (symname != NULL)
+	canonical_name = xstrdup (symname);
 
       self->canonical_names[sals->nelts - 1] = canonical_name;
     }
@@ -987,27 +1016,25 @@ iterate_over_all_matching_symtabs (struct linespec_state *state,
 						  ALL_DOMAIN,
 						  &matcher_data);
 
-      ALL_OBJFILE_SYMTABS (objfile, symtab)
+      ALL_OBJFILE_PRIMARY_SYMTABS (objfile, symtab)
 	{
-	  if (symtab->primary)
+	  struct block *block;
+
+	  block = BLOCKVECTOR_BLOCK (BLOCKVECTOR (symtab), STATIC_BLOCK);
+	  state->language->la_iterate_over_symbols (block, name, domain,
+						    callback, data);
+
+	  if (include_inline)
 	    {
-	      struct block *block;
+	      struct symbol_and_data_callback cad = { callback, data };
+	      int i;
 
-	      block = BLOCKVECTOR_BLOCK (BLOCKVECTOR (symtab), STATIC_BLOCK);
-	      LA_ITERATE_OVER_SYMBOLS (block, name, domain, callback, data);
-
-	      if (include_inline)
+	      for (i = FIRST_LOCAL_BLOCK;
+		   i < BLOCKVECTOR_NBLOCKS (BLOCKVECTOR (symtab)); i++)
 		{
-		  struct symbol_and_data_callback cad = { callback, data };
-		  int i;
-
-		  for (i = FIRST_LOCAL_BLOCK;
-		       i < BLOCKVECTOR_NBLOCKS (BLOCKVECTOR (symtab)); i++)
-		    {
-		      block = BLOCKVECTOR_BLOCK (BLOCKVECTOR (symtab), i);
-		      LA_ITERATE_OVER_SYMBOLS (block, name, domain,
-					       iterate_inline_only, &cad);
-		    }
+		  block = BLOCKVECTOR_BLOCK (BLOCKVECTOR (symtab), i);
+		  state->language->la_iterate_over_symbols
+		    (block, name, domain, iterate_inline_only, &cad);
 		}
 	    }
 	}
@@ -1048,7 +1075,6 @@ find_methods (struct type *t, const char *name,
 	      VEC (const_char_ptr) **result_names,
 	      VEC (typep) **superclasses)
 {
-  int i1 = 0;
   int ibase;
   const char *class_name = type_name_no_tag (t);
 
@@ -1058,7 +1084,6 @@ find_methods (struct type *t, const char *name,
   if (class_name)
     {
       int method_counter;
-      int name_len = strlen (name);
 
       CHECK_TYPEDEF (t);
 
@@ -1349,7 +1374,7 @@ decode_line_2 (struct linespec_state *self,
    FILENAME).  */
 
 static void ATTRIBUTE_NORETURN
-symbol_not_found_error (char *symbol, char *filename)
+symbol_not_found_error (const char *symbol, const char *filename)
 {
   if (symbol == NULL)
     symbol = "";
@@ -1422,7 +1447,7 @@ unexpected_linespec_error (linespec_parser *parser)
 /* Parse and return a line offset in STRING.  */
 
 static struct line_offset
-linespec_parse_line_offset (char *string)
+linespec_parse_line_offset (const char *string)
 {
   struct line_offset line_offset = {0, LINE_OFFSET_NONE};
 
@@ -1697,22 +1722,24 @@ create_sals_line_offset (struct linespec_state *self,
 
   /* This is where we need to make sure we have good defaults.
      We must guarantee that this section of code is never executed
-     when we are called with just a function anme, since
+     when we are called with just a function name, since
      set_default_source_symtab_and_line uses
      select_source_symtab that calls us with such an argument.  */
 
   if (VEC_length (symtab_p, ls->file_symtabs) == 1
       && VEC_index (symtab_p, ls->file_symtabs, 0) == NULL)
     {
+      const char *fullname;
+
       set_current_program_space (self->program_space);
 
       /* Make sure we have at least a default source line.  */
       set_default_source_symtab_and_line ();
       initialize_defaults (&self->default_symtab, &self->default_line);
+      fullname = symtab_to_fullname (self->default_symtab);
       VEC_pop (symtab_p, ls->file_symtabs);
       VEC_free (symtab_p, ls->file_symtabs);
-      ls->file_symtabs
-	= collect_symtabs_from_filename (self->default_symtab->filename);
+      ls->file_symtabs = collect_symtabs_from_filename (fullname);
       use_default = 1;
     }
 
@@ -1811,7 +1838,7 @@ create_sals_line_offset (struct linespec_state *self,
 	       found.  */
 	    intermediate_results.sals[i].line = val.line;
 	    add_sal_to_sals (self, &values, &intermediate_results.sals[i],
-			     sym ? SYMBOL_NATURAL_NAME (sym) : NULL);
+			     sym ? SYMBOL_NATURAL_NAME (sym) : NULL, 0);
 	  }
 
       do_cleanups (cleanup);
@@ -1839,13 +1866,14 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 
   if (ls->expression != NULL)
     {
+      struct symtab_and_line sal;
+
       /* We have an expression.  No other attribute is allowed.  */
-      sals.sals = XMALLOC (struct symtab_and_line);
-      sals.nelts = 1;
-      sals.sals[0] = find_pc_line (ls->expr_pc, 0);
-      sals.sals[0].pc = ls->expr_pc;
-      sals.sals[0].section = find_pc_overlay (ls->expr_pc);
-      sals.sals[0].explicit_pc = 1;
+      sal = find_pc_line (ls->expr_pc, 0);
+      sal.pc = ls->expr_pc;
+      sal.section = find_pc_overlay (ls->expr_pc);
+      sal.explicit_pc = 1;
+      add_sal_to_sals (state, &sals, &sal, ls->expression, 1);
     }
   else if (ls->labels.label_symbols != NULL)
     {
@@ -1856,9 +1884,9 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 
       for (i = 0; VEC_iterate (symbolp, ls->labels.label_symbols, i, sym); ++i)
 	{
-	  symbol_to_sal (&sal, state->funfirstline, sym);
-	  add_sal_to_sals (state, &sals, &sal,
-			   SYMBOL_NATURAL_NAME (sym));
+	  if (symbol_to_sal (&sal, state->funfirstline, sym))
+	    add_sal_to_sals (state, &sals, &sal,
+			     SYMBOL_NATURAL_NAME (sym), 0);
 	}
     }
   else if (ls->function_symbols != NULL || ls->minimal_symbols != NULL)
@@ -1882,9 +1910,10 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 	    {
 	      pspace = SYMTAB_PSPACE (SYMBOL_SYMTAB (sym));
 	      set_current_program_space (pspace);
-	      symbol_to_sal (&sal, state->funfirstline, sym);
-	      if (maybe_add_address (state->addr_set, pspace, sal.pc))
-		add_sal_to_sals (state, &sals, &sal, SYMBOL_NATURAL_NAME (sym));
+	      if (symbol_to_sal (&sal, state->funfirstline, sym)
+		  && maybe_add_address (state->addr_set, pspace, sal.pc))
+		add_sal_to_sals (state, &sals, &sal,
+				 SYMBOL_NATURAL_NAME (sym), 0);
 	    }
 	}
 
@@ -1912,7 +1941,11 @@ convert_linespec_to_sals (struct linespec_state *state, linespec_p ls)
 
 	/* Make sure we have a filename for canonicalization.  */
 	if (ls->source_filename == NULL)
-	  ls->source_filename = xstrdup (state->default_symtab->filename);
+	  {
+	    const char *fullname = symtab_to_fullname (state->default_symtab);
+
+	    ls->source_filename = xstrdup (fullname);
+	  }
     }
   else
     {
@@ -2008,6 +2041,10 @@ parse_linespec (linespec_parser *parser, char **argptr)
 	}
     }
 
+  /* A keyword at the start cannot be interpreted as such.
+     Consider "b thread thread 42".  */
+  parser->keyword_ok = 0;
+
   parser->lexer.saved_arg = *argptr;
   parser->lexer.stream = argptr;
   file_exception.reason = 0;
@@ -2064,23 +2101,23 @@ parse_linespec (linespec_parser *parser, char **argptr)
       cleanup = make_cleanup (xfree, var);
       PARSER_RESULT (parser)->line_offset
 	= linespec_parse_variable (PARSER_STATE (parser), var);
+      do_cleanups (cleanup);
 
       /* If a line_offset wasn't found (VAR is the name of a user
 	 variable/function), then skip to normal symbol processing.  */
       if (PARSER_RESULT (parser)->line_offset.sign != LINE_OFFSET_UNKNOWN)
 	{
-	  discard_cleanups (cleanup);
-
 	  /* Consume this token.  */
 	  linespec_lexer_consume_token (parser);
 
 	  goto convert_to_sals;
 	}
-
-      do_cleanups (cleanup);
     }
   else if (token.type != LSTOKEN_STRING && token.type != LSTOKEN_NUMBER)
     unexpected_linespec_error (parser);
+
+  /* Now we can recognize keywords.  */
+  parser->keyword_ok = 1;
 
   /* Shortcut: If the next token is not LSTOKEN_COLON, we know that
      this token cannot represent a filename.  */
@@ -2222,14 +2259,10 @@ linespec_parser_delete (void *arg)
 {
   linespec_parser *parser = (linespec_parser *) arg;
 
-  if (PARSER_RESULT (parser)->expression)
-    xfree (PARSER_RESULT (parser)->expression);
-  if (PARSER_RESULT (parser)->source_filename)
-    xfree (PARSER_RESULT (parser)->source_filename);
-  if (PARSER_RESULT (parser)->label_name)
-    xfree (PARSER_RESULT (parser)->label_name);
-  if (PARSER_RESULT (parser)->function_name)
-    xfree (PARSER_RESULT (parser)->function_name);
+  xfree ((char *) PARSER_RESULT (parser)->expression);
+  xfree ((char *) PARSER_RESULT (parser)->source_filename);
+  xfree ((char *) PARSER_RESULT (parser)->label_name);
+  xfree ((char *) PARSER_RESULT (parser)->function_name);
 
   if (PARSER_RESULT (parser)->file_symtabs != NULL)
     VEC_free (symtab_p, PARSER_RESULT (parser)->file_symtabs);
@@ -2260,7 +2293,6 @@ decode_line_full (char **argptr, int flags,
 {
   struct symtabs_and_lines result;
   struct cleanup *cleanups;
-  char *arg_start = *argptr;
   VEC (const_char_ptr) *filters = NULL;
   linespec_parser parser;
   struct linespec_state *state;
@@ -2286,19 +2318,15 @@ decode_line_full (char **argptr, int flags,
   gdb_assert (canonical->addr_string != NULL);
   canonical->pre_expanded = 1;
 
-  /* Fill in the missing canonical names.  */
+  /* Arrange for allocated canonical names to be freed.  */
   if (result.nelts > 0)
     {
       int i;
 
-      if (state->canonical_names == NULL)
-	state->canonical_names = xcalloc (result.nelts, sizeof (char *));
       make_cleanup (xfree, state->canonical_names);
       for (i = 0; i < result.nelts; ++i)
 	{
-	  if (state->canonical_names[i] == NULL)
-	    state->canonical_names[i] = savestring (arg_start,
-						    *argptr - arg_start);
+	  gdb_assert (state->canonical_names[i] != NULL);
 	  make_cleanup (xfree, state->canonical_names[i]);
 	}
     }
@@ -2328,6 +2356,8 @@ decode_line_full (char **argptr, int flags,
   do_cleanups (cleanups);
 }
 
+/* See linespec.h.  */
+
 struct symtabs_and_lines
 decode_line_1 (char **argptr, int flags,
 	       struct symtab *default_symtab,
@@ -2346,6 +2376,51 @@ decode_line_1 (char **argptr, int flags,
 
   do_cleanups (cleanups);
   return result;
+}
+
+/* See linespec.h.  */
+
+struct symtabs_and_lines
+decode_line_with_current_source (char *string, int flags)
+{
+  struct symtabs_and_lines sals;
+  struct symtab_and_line cursal;
+
+  if (string == 0)
+    error (_("Empty line specification."));
+
+  /* We use whatever is set as the current source line.  We do not try
+     and get a default source symtab+line or it will recursively call us!  */
+  cursal = get_current_source_symtab_and_line ();
+
+  sals = decode_line_1 (&string, flags,
+			cursal.symtab, cursal.line);
+
+  if (*string)
+    error (_("Junk at end of line specification: %s"), string);
+  return sals;
+}
+
+/* See linespec.h.  */
+
+struct symtabs_and_lines
+decode_line_with_last_displayed (char *string, int flags)
+{
+  struct symtabs_and_lines sals;
+
+  if (string == 0)
+    error (_("Empty line specification."));
+
+  if (last_displayed_sal_is_valid ())
+    sals = decode_line_1 (&string, flags,
+			  get_last_displayed_symtab (),
+			  get_last_displayed_line ());
+  else
+    sals = decode_line_1 (&string, flags, (struct symtab *) NULL, 0);
+
+  if (*string)
+    error (_("Junk at end of line specification: %s"), string);
+  return sals;
 }
 
 
@@ -2409,6 +2484,7 @@ decode_objc (struct linespec_state *self, linespec_p ls, char **argptr)
   info.state = self;
   info.file_symtabs = NULL;
   VEC_safe_push (symtab_p, info.file_symtabs, NULL);
+  make_cleanup (VEC_cleanup (symtab_p), &info.file_symtabs);
   info.result.symbols = NULL;
   info.result.minimal_symbols = NULL;
   values.nelts = 0;
@@ -2432,6 +2508,7 @@ decode_objc (struct linespec_state *self, linespec_p ls, char **argptr)
       memcpy (saved_arg, *argptr, new_argptr - *argptr);
       saved_arg[new_argptr - *argptr] = '\0';
 
+      ls->function_name = xstrdup (saved_arg);
       ls->function_symbols = info.result.symbols;
       ls->minimal_symbols = info.result.minimal_symbols;
       values = convert_linespec_to_sals (self, ls);
@@ -2671,7 +2748,6 @@ find_method (struct linespec_state *self, VEC (symtab_p) *file_symtabs,
   VEC (typep) *superclass_vec;
   VEC (const_char_ptr) *result_names;
   struct collect_info info;
-  char *name_iter;
 
   /* Sort symbols so that symbols with the same program space are next
      to each other.  */
@@ -2878,7 +2954,7 @@ find_function_symbols (struct linespec_state *state,
 /* Find all symbols named NAME in FILE_SYMTABS, returning debug symbols
    in SYMBOLS and minimal symbols in MINSYMS.  */
 
-void
+static void
 find_linespec_symbols (struct linespec_state *state,
 		       VEC (symtab_p) *file_symtabs,
 		       const char *name,
@@ -2950,6 +3026,7 @@ find_linespec_symbols (struct linespec_state *state,
 
   /* Find a list of classes named KLASS.  */
   classes = lookup_prefix_sym (state, file_symtabs, klass);
+  make_cleanup (VEC_cleanup (symbolp), &classes);
   if (!VEC_empty (symbolp, classes))
     {
       /* Now locate a list of suitable methods named METHOD.  */
@@ -3064,7 +3141,7 @@ decode_digits_list_mode (struct linespec_state *self,
       val.pc = 0;
       val.explicit_line = 1;
 
-      add_sal_to_sals (self, values, &val, NULL);
+      add_sal_to_sals (self, values, &val, NULL, 0);
     }
 }
 
@@ -3208,7 +3285,7 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
     skip_prologue_sal (&sal);
 
   if (maybe_add_address (self->addr_set, objfile->pspace, sal.pc))
-    add_sal_to_sals (self, result, &sal, SYMBOL_NATURAL_NAME (msymbol));
+    add_sal_to_sals (self, result, &sal, SYMBOL_NATURAL_NAME (msymbol), 0);
 }
 
 /* A helper struct to pass some data through
@@ -3386,8 +3463,6 @@ add_matching_symbols_to_info (const char *name,
 
   for (ix = 0; VEC_iterate (symtab_p, info->file_symtabs, ix, elt); ++ix)
     {
-      struct symbol *sym;
-
       if (elt == NULL)
 	{
 	  iterate_over_all_matching_symtabs (info->state, name, VAR_DOMAIN,

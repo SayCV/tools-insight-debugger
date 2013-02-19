@@ -1,6 +1,6 @@
 /* Renesas M32C target-dependent code for GDB, the GNU debugger.
 
-   Copyright 2004-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -200,16 +200,16 @@ make_types (struct gdbarch *arch)
   TYPE_UNSIGNED (tdep->ptr_voyd) = 1;
   tdep->func_voyd = lookup_function_type (tdep->voyd);
 
-  sprintf (type_name, "%s_data_addr_t",
-	   gdbarch_bfd_arch_info (arch)->printable_name);
+  xsnprintf (type_name, sizeof (type_name), "%s_data_addr_t",
+	     gdbarch_bfd_arch_info (arch)->printable_name);
   tdep->data_addr_reg_type
     = arch_type (arch, TYPE_CODE_PTR, data_addr_reg_bits / TARGET_CHAR_BIT,
                  xstrdup (type_name));
   TYPE_TARGET_TYPE (tdep->data_addr_reg_type) = tdep->voyd;
   TYPE_UNSIGNED (tdep->data_addr_reg_type) = 1;
 
-  sprintf (type_name, "%s_code_addr_t",
-	   gdbarch_bfd_arch_info (arch)->printable_name);
+  xsnprintf (type_name, sizeof (type_name), "%s_code_addr_t",
+	     gdbarch_bfd_arch_info (arch)->printable_name);
   tdep->code_addr_reg_type
     = arch_type (arch, TYPE_CODE_PTR, code_addr_reg_bits / TARGET_CHAR_BIT,
                  xstrdup (type_name));
@@ -2206,7 +2206,7 @@ m32c_return_by_passed_buf (struct type *type)
 
 static enum return_value_convention
 m32c_return_value (struct gdbarch *gdbarch,
-		   struct type *func_type,
+		   struct value *function,
 		   struct type *valtype,
 		   struct regcache *regcache,
 		   gdb_byte *readbuf,
@@ -2587,7 +2587,7 @@ m32c_virtual_frame_pointer (struct gdbarch *gdbarch, CORE_ADDR pc,
 			    LONGEST *frame_offset)
 {
   const char *name;
-  CORE_ADDR func_addr, func_end, sal_end;
+  CORE_ADDR func_addr, func_end;
   struct m32c_prologue p;
 
   struct regcache *regcache = get_current_regcache ();

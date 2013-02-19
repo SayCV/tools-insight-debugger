@@ -25,7 +25,7 @@ proc standard_look_and_feel {} {
     define_font global/default -family "Tahoma" -size 10
     # FIXME: this isn't actually a bold font...
     define_font global/bold -family windows-caption
-    define_font global/fixed -family "Courier New" -size 10
+    define_font global/fixed -family "Lucida Console" -size 9
     define_font global/status -family "Tahoma" -size 10
     # FIXME: we'd like this font to update automatically as well.  But
     # for now we can't.

@@ -425,7 +425,7 @@ rl78_elf_relocate_section
   dynobj = elf_hash_table (info)->dynobj;
   splt = NULL;
   if (dynobj != NULL)
-    splt = bfd_get_section_by_name (dynobj, ".plt");
+    splt = bfd_get_linker_section (dynobj, ".plt");
 
   for (rel = relocs; rel < relend; rel ++)
     {
@@ -473,7 +473,7 @@ rl78_elf_relocate_section
 
       if (sec != NULL && discarded_section (sec))
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					 rel, relend, howto, contents);
+					 rel, 1, relend, howto, 0, contents);
 
       if (info->relocatable)
 	{
@@ -1155,7 +1155,7 @@ rl78_get_reloc (long reloc)
 
 /* We support 16-bit pointers to code above 64k by generating a thunk
    below 64k containing a JMP instruction to the final address.  */
- 
+
 static bfd_boolean
 rl78_elf_check_relocs
     (bfd *                     abfd,
@@ -1173,7 +1173,7 @@ rl78_elf_check_relocs
 
   if (info->relocatable)
     return TRUE;
- 
+
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
   sym_hashes = elf_sym_hashes (abfd);
   local_plt_offsets = elf_local_got_offsets (abfd);
@@ -1186,7 +1186,7 @@ rl78_elf_check_relocs
       struct elf_link_hash_entry *h;
       unsigned long r_symndx;
       bfd_vma *offset;
- 
+
       r_symndx = ELF32_R_SYM (rel->r_info);
       if (r_symndx < symtab_hdr->sh_info)
         h = NULL;
@@ -1197,7 +1197,7 @@ rl78_elf_check_relocs
 		 || h->root.type == bfd_link_hash_warning)
 	    h = (struct elf_link_hash_entry *) h->root.u.i.link;
 	}
- 
+
       switch (ELF32_R_TYPE (rel->r_info))
         {
 	  /* This relocation describes a 16-bit pointer to a function.
@@ -1208,13 +1208,14 @@ rl78_elf_check_relocs
 	    elf_hash_table (info)->dynobj = dynobj = abfd;
 	  if (splt == NULL)
 	    {
-	      splt = bfd_get_section_by_name (dynobj, ".plt");
+	      splt = bfd_get_linker_section (dynobj, ".plt");
 	      if (splt == NULL)
 		{
 		  flagword flags = (SEC_ALLOC | SEC_LOAD | SEC_HAS_CONTENTS
 				    | SEC_IN_MEMORY | SEC_LINKER_CREATED
 				    | SEC_READONLY | SEC_CODE);
-		  splt = bfd_make_section_with_flags (dynobj, ".plt", flags);
+		  splt = bfd_make_section_anyway_with_flags (dynobj, ".plt",
+							     flags);
 		  if (splt == NULL
 		      || ! bfd_set_section_alignment (dynobj, splt, 1))
 		    return FALSE;
@@ -1250,7 +1251,7 @@ rl78_elf_check_relocs
 	  break;
         }
     }
- 
+
   return TRUE;
 }
 
@@ -1272,7 +1273,7 @@ rl78_elf_finish_dynamic_sections (bfd *abfd ATTRIBUTE_UNUSED,
   if (info->relax_trip > 0)
     {
       if ((dynobj = elf_hash_table (info)->dynobj) != NULL
-	  && (splt = bfd_get_section_by_name (dynobj, ".plt")) != NULL)
+	  && (splt = bfd_get_linker_section (dynobj, ".plt")) != NULL)
 	{
 	  bfd_byte *contents = splt->contents;
 	  unsigned int i, size = splt->size;
@@ -1301,7 +1302,7 @@ rl78_elf_always_size_sections (bfd *output_bfd ATTRIBUTE_UNUSED,
   if (dynobj == NULL)
     return TRUE;
 
-  splt = bfd_get_section_by_name (dynobj, ".plt");
+  splt = bfd_get_linker_section (dynobj, ".plt");
   BFD_ASSERT (splt != NULL);
 
   splt->contents = (bfd_byte *) bfd_zalloc (dynobj, splt->size);
@@ -1325,8 +1326,7 @@ struct relax_plt_data
 };
 
 static bfd_boolean
-rl78_relax_plt_check (struct elf_link_hash_entry *h,
-                      PTR xdata)
+rl78_relax_plt_check (struct elf_link_hash_entry *h, void * xdata)
 {
   struct relax_plt_data *data = (struct relax_plt_data *) xdata;
 
@@ -1357,8 +1357,7 @@ rl78_relax_plt_check (struct elf_link_hash_entry *h,
    previously had a plt entry, give it a new entry offset.  */
 
 static bfd_boolean
-rl78_relax_plt_realloc (struct elf_link_hash_entry *h,
-                        PTR xdata)
+rl78_relax_plt_realloc (struct elf_link_hash_entry *h, void * xdata)
 {
   bfd_vma *entry = (bfd_vma *) xdata;
 
@@ -1972,7 +1971,7 @@ struct {
   { 0x71, 0x58, 0x53, 0x5b },	/* CLR1	!addr16.0 */
   { 0x71, 0x68, 0x63, 0x6b },	/* CLR1	!addr16.0 */
   { 0x71, 0x78, 0x73, 0x7b },	/* CLR1	!addr16.0 */
-  
+
   { -1, -1, -1, -1 }
 };
 
@@ -2055,14 +2054,14 @@ rl78_elf_relax_section
       if (shndx_buf == NULL)
 	goto error_return;
       if (bfd_seek (abfd, shndx_hdr->sh_offset, SEEK_SET) != 0
-	  || bfd_bread ((PTR) shndx_buf, amt, abfd) != amt)
+	  || bfd_bread (shndx_buf, amt, abfd) != amt)
 	goto error_return;
       shndx_hdr->contents = (bfd_byte *) shndx_buf;
     }
 
   /* Get a copy of the native relocations.  */
   internal_relocs = (_bfd_elf_link_read_relocs
-		     (abfd, sec, (PTR) NULL, (Elf_Internal_Rela *) NULL,
+		     (abfd, sec, NULL, (Elf_Internal_Rela *) NULL,
 		      link_info->keep_memory));
   if (internal_relocs == NULL)
     goto error_return;
@@ -2349,7 +2348,7 @@ rl78_elf_relax_section
 		}
 	      break;
 	    }
-	  
+
 	}
 
       if (irel->r_addend & RL78_RELAXA_ADDR16)
@@ -2415,7 +2414,7 @@ rl78_elf_relax_section
 		      insn[poff] = relax_addr16[idx].insn_for_saddr;
 		      SNIP (poff+2, 1, R_RL78_RH_SADDR);
 		    }
-		
+
 		}
 	    }
 	}

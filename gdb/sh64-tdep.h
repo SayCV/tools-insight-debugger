@@ -1,5 +1,5 @@
 /* Target-dependent definitions for Renesas Super-H, for GDB.
-   Copyright (C) 2012 Free Software Foundation, Inc.
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,6 +20,5 @@
 #define SH64_TDEP_H
 
 extern gdbarch_init_ftype sh64_gdbarch_init;
-extern void sh64_show_regs (struct frame_info *frame);
 
 #endif /* SH64_TDEP_H */

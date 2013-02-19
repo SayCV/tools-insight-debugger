@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux i386.
 
-   Copyright (C) 2000-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -462,7 +462,7 @@ i386_linux_intx80_sysenter_syscall_record (struct regcache *regcache)
 static int
 i386_linux_record_signal (struct gdbarch *gdbarch,
                           struct regcache *regcache,
-                          enum target_signal signal)
+                          enum gdb_signal signal)
 {
   ULONGEST esp;
 

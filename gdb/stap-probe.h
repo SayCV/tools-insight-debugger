@@ -1,6 +1,6 @@
 /* SystemTap probe support for GDB.
 
-   Copyright (C) 2012 Free Software Foundation, Inc.
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -19,8 +19,6 @@
 
 #if !defined (STAP_PROBE_H)
 #define STAP_PROBE_H 1
-
-#include "probe.h"
 
 /* Structure which holds information about the parsing process of one probe's
    argument.  */

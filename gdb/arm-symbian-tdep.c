@@ -1,6 +1,6 @@
 /* ARM Symbian OS target support.
 
-   Copyright (C) 2008-2012 Free Software Foundation, Inc.
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -89,7 +89,7 @@ arm_symbian_init_abi (struct gdbarch_info info,
 static enum gdb_osabi
 arm_symbian_osabi_sniffer (bfd *abfd)
 {
-  Elf_Internal_Phdr *phdrs, **segments;
+  Elf_Internal_Phdr *phdrs;
   long phdrs_size;
   int num_phdrs, i;
 

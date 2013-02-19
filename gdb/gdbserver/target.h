@@ -1,5 +1,5 @@
 /* Target operations for the remote server for GDB.
-   Copyright (C) 2002-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
 
    Contributed by MontaVista Software.
 
@@ -53,7 +53,7 @@ struct thread_resume
      thread.  If stopping a thread, and this is 0, the target should
      stop the thread however it best decides to (e.g., SIGSTOP on
      linux; SuspendThread on win32).  This is a host signal value (not
-     enum target_signal).  */
+     enum gdb_signal).  */
   int sig;
 };
 
@@ -97,7 +97,7 @@ struct target_waitstatus
     union
       {
 	int integer;
-	enum target_signal sig;
+	enum gdb_signal sig;
 	ptid_t related_pid;
 	char *execd_pathname;
       }
@@ -409,8 +409,7 @@ void set_target_ops (struct target_ops *);
 #define myattach(pid) \
   (*the_target->attach) (pid)
 
-#define kill_inferior(pid) \
-  (*the_target->kill) (pid)
+int kill_inferior (int);
 
 #define detach_inferior(pid) \
   (*the_target->detach) (pid)

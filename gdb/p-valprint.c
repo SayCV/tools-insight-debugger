@@ -1,7 +1,6 @@
 /* Support for printing Pascal values for GDB, the GNU debugger.
 
-   Copyright (C) 2000-2001, 2003, 2005-2012 Free Software Foundation,
-   Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -72,8 +71,8 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
   unsigned eltlen;
   int length_pos, length_size, string_pos;
   struct type *char_type;
-  LONGEST val;
   CORE_ADDR addr;
+  int want_space = 0;
 
   CHECK_TYPEDEF (type);
   switch (TYPE_CODE (type))
@@ -157,7 +156,7 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	  /* Extract the address, assume that it is unsigned.  */
 	  addr = extract_unsigned_integer (valaddr + embedded_offset,
 					   TYPE_LENGTH (type), byte_order);
-	  print_address_demangle (gdbarch, addr, stream, demangle);
+	  print_address_demangle (options, gdbarch, addr, stream, demangle);
 	  break;
 	}
       check_typedef (TYPE_TARGET_TYPE (type));
@@ -169,13 +168,14 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
       if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
 	{
 	  /* Try to print what function it points to.  */
-	  print_address_demangle (gdbarch, addr, stream, demangle);
+	  print_address_demangle (options, gdbarch, addr, stream, demangle);
 	  return;
 	}
 
       if (options->addressprint && options->format != 's')
 	{
 	  fputs_filtered (paddress (gdbarch, addr), stream);
+	  want_space = 1;
 	}
 
       /* For a pointer to char or unsigned char, also print the string
@@ -188,6 +188,8 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	  && (options->format == 0 || options->format == 's')
 	  && addr != 0)
 	{
+	  if (want_space)
+	    fputs_filtered (" ", stream);
 	  /* No wide string yet.  */
 	  i = val_print_string (elttype, NULL, addr, -1, stream, options);
 	}
@@ -203,6 +205,8 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	  ULONGEST string_length;
 	  void *buffer;
 
+	  if (want_space)
+	    fputs_filtered (" ", stream);
 	  buffer = xmalloc (length_size);
 	  read_memory (addr + length_pos, buffer, length_size);
 	  string_length = extract_unsigned_integer (buffer, length_size,
@@ -220,12 +224,17 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	  struct minimal_symbol *msymbol =
 	    lookup_minimal_symbol_by_pc (vt_address);
 
-	  if ((msymbol != NULL)
+	  /* If 'symbol_print' is set, we did the work above.  */
+	  if (!options->symbol_print
+	      && (msymbol != NULL)
 	      && (vt_address == SYMBOL_VALUE_ADDRESS (msymbol)))
 	    {
-	      fputs_filtered (" <", stream);
+	      if (want_space)
+		fputs_filtered (" ", stream);
+	      fputs_filtered ("<", stream);
 	      fputs_filtered (SYMBOL_PRINT_NAME (msymbol), stream);
 	      fputs_filtered (">", stream);
+	      want_space = 1;
 	    }
 	  if (vt_address && options->vtblprint)
 	    {
@@ -233,7 +242,10 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	      struct symbol *wsym = (struct symbol *) NULL;
 	      struct type *wtype;
 	      struct block *block = (struct block *) NULL;
-	      int is_this_fld;
+	      struct field_of_this_result is_this_fld;
+
+	      if (want_space)
+		fputs_filtered (" ", stream);
 
 	      if (msymbol != NULL)
 		wsym = lookup_symbol (SYMBOL_LINKAGE_NAME (msymbol), block,
@@ -292,7 +304,7 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	     -fvtable_thunks.  (Otherwise, look under TYPE_CODE_PTR.)  */
 	  /* Extract the address, assume that it is unsigned.  */
 	  print_address_demangle
-	    (gdbarch,
+	    (options, gdbarch,
 	     extract_unsigned_integer (valaddr + embedded_offset
 				       + TYPE_FIELD_BITPOS (type,
 							    VTBL_FNADDR_OFFSET) / 8,
@@ -321,7 +333,6 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	}
       break;
 
-    case TYPE_CODE_BITSTRING:
     case TYPE_CODE_SET:
       elttype = TYPE_INDEX_TYPE (type);
       CHECK_TYPEDEF (elttype);
@@ -336,13 +347,9 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 	  struct type *range = elttype;
 	  LONGEST low_bound, high_bound;
 	  int i;
-	  int is_bitstring = TYPE_CODE (type) == TYPE_CODE_BITSTRING;
 	  int need_comma = 0;
 
-	  if (is_bitstring)
-	    fputs_filtered ("B'", stream);
-	  else
-	    fputs_filtered ("[", stream);
+	  fputs_filtered ("[", stream);
 
 	  i = get_discrete_bounds (range, &low_bound, &high_bound);
 	  if (low_bound == 0 && high_bound == -1 && TYPE_LENGTH (type) > 0)
@@ -370,9 +377,7 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 		  i = element;
 		  goto maybe_bad_bstring;
 		}
-	      if (is_bitstring)
-		fprintf_filtered (stream, "%d", element);
-	      else if (element)
+	      if (element)
 		{
 		  if (need_comma)
 		    fputs_filtered (", ", stream);
@@ -396,10 +401,7 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 		}
 	    }
 	done:
-	  if (is_bitstring)
-	    fputs_filtered ("'", stream);
-	  else
-	    fputs_filtered ("]", stream);
+	  fputs_filtered ("]", stream);
 	}
       break;
 
@@ -592,36 +594,17 @@ pascal_object_print_value_fields (struct type *type, const gdb_byte *valaddr,
 	    {
 	      wrap_here (n_spaces (2 + 2 * recurse));
 	    }
-	  if (options->inspect_it)
-	    {
-	      if (TYPE_CODE (TYPE_FIELD_TYPE (type, i)) == TYPE_CODE_PTR)
-		fputs_filtered ("\"( ptr \"", stream);
-	      else
-		fputs_filtered ("\"( nodef \"", stream);
-	      if (field_is_static (&TYPE_FIELD (type, i)))
-		fputs_filtered ("static ", stream);
-	      fprintf_symbol_filtered (stream, TYPE_FIELD_NAME (type, i),
-				       language_cplus,
-				       DMGL_PARAMS | DMGL_ANSI);
-	      fputs_filtered ("\" \"", stream);
-	      fprintf_symbol_filtered (stream, TYPE_FIELD_NAME (type, i),
-				       language_cplus,
-				       DMGL_PARAMS | DMGL_ANSI);
-	      fputs_filtered ("\") \"", stream);
-	    }
-	  else
-	    {
-	      annotate_field_begin (TYPE_FIELD_TYPE (type, i));
 
-	      if (field_is_static (&TYPE_FIELD (type, i)))
-		fputs_filtered ("static ", stream);
-	      fprintf_symbol_filtered (stream, TYPE_FIELD_NAME (type, i),
-				       language_cplus,
-				       DMGL_PARAMS | DMGL_ANSI);
-	      annotate_field_name_end ();
-	      fputs_filtered (" = ", stream);
-	      annotate_field_value ();
-	    }
+	  annotate_field_begin (TYPE_FIELD_TYPE (type, i));
+
+	  if (field_is_static (&TYPE_FIELD (type, i)))
+	    fputs_filtered ("static ", stream);
+	  fprintf_symbol_filtered (stream, TYPE_FIELD_NAME (type, i),
+				   language_cplus,
+				   DMGL_PARAMS | DMGL_ANSI);
+	  annotate_field_name_end ();
+	  fputs_filtered (" = ", stream);
+	  annotate_field_value ();
 
 	  if (!field_is_static (&TYPE_FIELD (type, i))
 	      && TYPE_FIELD_PACKED (type, i))
@@ -784,8 +767,11 @@ pascal_object_print_value (struct type *type, const gdb_byte *valaddr,
 
 	  if (boffset < 0 || boffset >= TYPE_LENGTH (type))
 	    {
-	      /* FIXME (alloc): not safe is baseclass is really really big. */
-	      gdb_byte *buf = alloca (TYPE_LENGTH (baseclass));
+	      gdb_byte *buf;
+	      struct cleanup *back_to;
+
+	      buf = xmalloc (TYPE_LENGTH (baseclass));
+	      back_to = make_cleanup (xfree, buf);
 
 	      base_valaddr = buf;
 	      if (target_read_memory (address + boffset, buf,
@@ -794,6 +780,7 @@ pascal_object_print_value (struct type *type, const gdb_byte *valaddr,
 	      address = address + boffset;
 	      thisoffset = 0;
 	      boffset = 0;
+	      do_cleanups (back_to);
 	    }
 	  else
 	    base_valaddr = valaddr;

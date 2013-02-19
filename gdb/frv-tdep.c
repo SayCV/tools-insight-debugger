@@ -1,6 +1,6 @@
 /* Target-dependent code for the Fujitsu FR-V, for GDB, the GNU Debugger.
 
-   Copyright (C) 2002-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -136,7 +136,6 @@ new_variant (void)
 {
   struct gdbarch_tdep *var;
   int r;
-  char buf[20];
 
   var = xmalloc (sizeof (*var));
   memset (var, 0, sizeof (*var));
@@ -234,7 +233,7 @@ set_variant_num_gprs (struct gdbarch_tdep *var, int num_gprs)
     {
       char buf[20];
 
-      sprintf (buf, "gr%d", r);
+      xsnprintf (buf, sizeof (buf), "gr%d", r);
       var->register_names[first_gpr_regnum + r] = xstrdup (buf);
     }
 }
@@ -253,7 +252,7 @@ set_variant_num_fprs (struct gdbarch_tdep *var, int num_fprs)
     {
       char buf[20];
 
-      sprintf (buf, "fr%d", r);
+      xsnprintf (buf, sizeof (buf), "fr%d", r);
       var->register_names[first_fpr_regnum + r] = xstrdup (buf);
     }
 }
@@ -1099,8 +1098,6 @@ frv_frame_unwind_cache (struct frame_info *this_frame,
 			 void **this_prologue_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  CORE_ADDR pc;
-  ULONGEST this_base;
   struct frv_unwind_cache *info;
 
   if ((*this_prologue_cache))
@@ -1351,7 +1348,7 @@ frv_store_return_value (struct type *type, struct regcache *regcache,
 }
 
 static enum return_value_convention
-frv_return_value (struct gdbarch *gdbarch, struct type *func_type,
+frv_return_value (struct gdbarch *gdbarch, struct value *function,
 		  struct type *valtype, struct regcache *regcache,
 		  gdb_byte *readbuf, const gdb_byte *writebuf)
 {

@@ -1,9 +1,9 @@
-/* *INDENT-OFF* */ /* THIS FILE IS GENERATED */
+/* *INDENT-OFF* */ /* THIS FILE IS GENERATED -*- buffer-read-only: t -*- */
+/* vi:set ro: */
 
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
-   2007, 2008, 2009 Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -56,18 +56,34 @@ struct syscall;
 struct agent_expr;
 struct axs_value;
 struct stap_parse_info;
+struct ravenscar_arch_ops;
+struct elf_internal_linux_prpsinfo;
 
-/* The architecture associated with the connection to the target.
- 
-   The architecture vector provides some information that is really
-   a property of the target: The layout of certain packets, for instance;
-   or the solib_ops vector.  Etc.  To differentiate architecture accesses
-   to per-target properties from per-thread/per-frame/per-objfile properties,
-   accesses to per-target properties should be made through target_gdbarch.
+/* The architecture associated with the inferior through the
+   connection to the target.
 
-   Eventually, when support for multiple targets is implemented in
-   GDB, this global should be made target-specific.  */
-extern struct gdbarch *target_gdbarch;
+   The architecture vector provides some information that is really a
+   property of the inferior, accessed through a particular target:
+   ptrace operations; the layout of certain RSP packets; the solib_ops
+   vector; etc.  To differentiate architecture accesses to
+   per-inferior/target properties from
+   per-thread/per-frame/per-objfile properties, accesses to
+   per-inferior/target properties should be made through this
+   gdbarch.  */
+
+/* This is a convenience wrapper for 'current_inferior ()->gdbarch'.  */
+extern struct gdbarch *target_gdbarch (void);
+
+/* The initial, default architecture.  It uses host values (for want of a better
+   choice).  */
+extern struct gdbarch startup_gdbarch;
+
+
+/* Callback type for the 'iterate_over_objfiles_in_search_order'
+   gdbarch  method.  */
+
+typedef int (iterate_over_objfiles_in_search_order_cb_ftype)
+  (struct objfile *objfile, void *cb_data);
 
 
 /* The following are pre-initialized by GDBARCH.  */
@@ -434,8 +450,8 @@ typedef CORE_ADDR (gdbarch_integer_to_address_ftype) (struct gdbarch *gdbarch, s
 extern CORE_ADDR gdbarch_integer_to_address (struct gdbarch *gdbarch, struct type *type, const gdb_byte *buf);
 extern void set_gdbarch_integer_to_address (struct gdbarch *gdbarch, gdbarch_integer_to_address_ftype *integer_to_address);
 
-/* Return the return-value convention that will be used by FUNCTYPE
-   to return a value of type VALTYPE.  FUNCTYPE may be NULL in which
+/* Return the return-value convention that will be used by FUNCTION
+   to return a value of type VALTYPE.  FUNCTION may be NULL in which
    case the return convention is computed based only on VALTYPE.
   
    If READBUF is not NULL, extract the return value and save it in this buffer.
@@ -447,9 +463,19 @@ extern void set_gdbarch_integer_to_address (struct gdbarch *gdbarch, gdbarch_int
 
 extern int gdbarch_return_value_p (struct gdbarch *gdbarch);
 
-typedef enum return_value_convention (gdbarch_return_value_ftype) (struct gdbarch *gdbarch, struct type *functype, struct type *valtype, struct regcache *regcache, gdb_byte *readbuf, const gdb_byte *writebuf);
-extern enum return_value_convention gdbarch_return_value (struct gdbarch *gdbarch, struct type *functype, struct type *valtype, struct regcache *regcache, gdb_byte *readbuf, const gdb_byte *writebuf);
+typedef enum return_value_convention (gdbarch_return_value_ftype) (struct gdbarch *gdbarch, struct value *function, struct type *valtype, struct regcache *regcache, gdb_byte *readbuf, const gdb_byte *writebuf);
+extern enum return_value_convention gdbarch_return_value (struct gdbarch *gdbarch, struct value *function, struct type *valtype, struct regcache *regcache, gdb_byte *readbuf, const gdb_byte *writebuf);
 extern void set_gdbarch_return_value (struct gdbarch *gdbarch, gdbarch_return_value_ftype *return_value);
+
+/* Return true if the return value of function is stored in the first hidden
+   parameter.  In theory, this feature should be language-dependent, specified
+   by language and its ABI, such as C++.  Unfortunately, compiler may
+   implement it to a target-dependent feature.  So that we need such hook here
+   to be aware of this in GDB. */
+
+typedef int (gdbarch_return_in_first_hidden_param_p_ftype) (struct gdbarch *gdbarch, struct type *type);
+extern int gdbarch_return_in_first_hidden_param_p (struct gdbarch *gdbarch, struct type *type);
+extern void set_gdbarch_return_in_first_hidden_param_p (struct gdbarch *gdbarch, gdbarch_return_in_first_hidden_param_p_ftype *return_in_first_hidden_param_p);
 
 typedef CORE_ADDR (gdbarch_skip_prologue_ftype) (struct gdbarch *gdbarch, CORE_ADDR ip);
 extern CORE_ADDR gdbarch_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR ip);
@@ -574,13 +600,6 @@ extern void set_gdbarch_convert_from_func_ptr_addr (struct gdbarch *gdbarch, gdb
 typedef CORE_ADDR (gdbarch_addr_bits_remove_ftype) (struct gdbarch *gdbarch, CORE_ADDR addr);
 extern CORE_ADDR gdbarch_addr_bits_remove (struct gdbarch *gdbarch, CORE_ADDR addr);
 extern void set_gdbarch_addr_bits_remove (struct gdbarch *gdbarch, gdbarch_addr_bits_remove_ftype *addr_bits_remove);
-
-/* It is not at all clear why gdbarch_smash_text_address is not folded into
-   gdbarch_addr_bits_remove. */
-
-typedef CORE_ADDR (gdbarch_smash_text_address_ftype) (struct gdbarch *gdbarch, CORE_ADDR addr);
-extern CORE_ADDR gdbarch_smash_text_address (struct gdbarch *gdbarch, CORE_ADDR addr);
-extern void set_gdbarch_smash_text_address (struct gdbarch *gdbarch, gdbarch_smash_text_address_ftype *smash_text_address);
 
 /* FIXME/cagney/2001-01-18: This should be split in two.  A target method that
    indicates if the target needs software single step.  An ISA method to
@@ -717,6 +736,18 @@ extern int gdbarch_make_corefile_notes_p (struct gdbarch *gdbarch);
 typedef char * (gdbarch_make_corefile_notes_ftype) (struct gdbarch *gdbarch, bfd *obfd, int *note_size);
 extern char * gdbarch_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size);
 extern void set_gdbarch_make_corefile_notes (struct gdbarch *gdbarch, gdbarch_make_corefile_notes_ftype *make_corefile_notes);
+
+/* The elfcore writer hook to use to write Linux prpsinfo notes to core
+   files.  Most Linux architectures use the same prpsinfo32 or
+   prpsinfo64 layouts, and so won't need to provide this hook, as we
+   call the Linux generic routines in bfd to write prpsinfo notes by
+   default. */
+
+extern int gdbarch_elfcore_write_linux_prpsinfo_p (struct gdbarch *gdbarch);
+
+typedef char * (gdbarch_elfcore_write_linux_prpsinfo_ftype) (bfd *obfd, char *note_data, int *note_size, const struct elf_internal_linux_prpsinfo *info);
+extern char * gdbarch_elfcore_write_linux_prpsinfo (struct gdbarch *gdbarch, bfd *obfd, char *note_data, int *note_size, const struct elf_internal_linux_prpsinfo *info);
+extern void set_gdbarch_elfcore_write_linux_prpsinfo (struct gdbarch *gdbarch, gdbarch_elfcore_write_linux_prpsinfo_ftype *elfcore_write_linux_prpsinfo);
 
 /* Find core file memory regions */
 
@@ -935,23 +966,23 @@ extern void set_gdbarch_process_record (struct gdbarch *gdbarch, gdbarch_process
 
 extern int gdbarch_process_record_signal_p (struct gdbarch *gdbarch);
 
-typedef int (gdbarch_process_record_signal_ftype) (struct gdbarch *gdbarch, struct regcache *regcache, enum target_signal signal);
-extern int gdbarch_process_record_signal (struct gdbarch *gdbarch, struct regcache *regcache, enum target_signal signal);
+typedef int (gdbarch_process_record_signal_ftype) (struct gdbarch *gdbarch, struct regcache *regcache, enum gdb_signal signal);
+extern int gdbarch_process_record_signal (struct gdbarch *gdbarch, struct regcache *regcache, enum gdb_signal signal);
 extern void set_gdbarch_process_record_signal (struct gdbarch *gdbarch, gdbarch_process_record_signal_ftype *process_record_signal);
 
-/* Signal translation: translate inferior's signal (host's) number into
-   GDB's representation. */
+/* Signal translation: translate inferior's signal (target's) number
+   into GDB's representation.  The implementation of this method must
+   be host independent.  IOW, don't rely on symbols of the NAT_FILE
+   header (the nm-*.h files), the host <signal.h> header, or similar
+   headers.  This is mainly used when cross-debugging core files ---
+   "Live" targets hide the translation behind the target interface
+   (target_wait, target_resume, etc.). */
 
-typedef enum target_signal (gdbarch_target_signal_from_host_ftype) (struct gdbarch *gdbarch, int signo);
-extern enum target_signal gdbarch_target_signal_from_host (struct gdbarch *gdbarch, int signo);
-extern void set_gdbarch_target_signal_from_host (struct gdbarch *gdbarch, gdbarch_target_signal_from_host_ftype *target_signal_from_host);
+extern int gdbarch_gdb_signal_from_target_p (struct gdbarch *gdbarch);
 
-/* Signal translation: translate GDB's signal number into inferior's host
-   signal number. */
-
-typedef int (gdbarch_target_signal_to_host_ftype) (struct gdbarch *gdbarch, enum target_signal ts);
-extern int gdbarch_target_signal_to_host (struct gdbarch *gdbarch, enum target_signal ts);
-extern void set_gdbarch_target_signal_to_host (struct gdbarch *gdbarch, gdbarch_target_signal_to_host_ftype *target_signal_to_host);
+typedef enum gdb_signal (gdbarch_gdb_signal_from_target_ftype) (struct gdbarch *gdbarch, int signo);
+extern enum gdb_signal gdbarch_gdb_signal_from_target (struct gdbarch *gdbarch, int signo);
+extern void set_gdbarch_gdb_signal_from_target (struct gdbarch *gdbarch, gdbarch_gdb_signal_from_target_ftype *gdb_signal_from_target);
 
 /* Extra signal info inspection.
   
@@ -1175,6 +1206,39 @@ typedef void (gdbarch_info_proc_ftype) (struct gdbarch *gdbarch, char *args, enu
 extern void gdbarch_info_proc (struct gdbarch *gdbarch, char *args, enum info_proc_what what);
 extern void set_gdbarch_info_proc (struct gdbarch *gdbarch, gdbarch_info_proc_ftype *info_proc);
 
+/* Implement the "info proc" command for core files.  Noe that there
+   are two "info_proc"-like methods on gdbarch -- one for core files,
+   one for live targets. */
+
+extern int gdbarch_core_info_proc_p (struct gdbarch *gdbarch);
+
+typedef void (gdbarch_core_info_proc_ftype) (struct gdbarch *gdbarch, char *args, enum info_proc_what what);
+extern void gdbarch_core_info_proc (struct gdbarch *gdbarch, char *args, enum info_proc_what what);
+extern void set_gdbarch_core_info_proc (struct gdbarch *gdbarch, gdbarch_core_info_proc_ftype *core_info_proc);
+
+/* Iterate over all objfiles in the order that makes the most sense
+   for the architecture to make global symbol searches.
+  
+   CB is a callback function where OBJFILE is the objfile to be searched,
+   and CB_DATA a pointer to user-defined data (the same data that is passed
+   when calling this gdbarch method).  The iteration stops if this function
+   returns nonzero.
+  
+   CB_DATA is a pointer to some user-defined data to be passed to
+   the callback.
+  
+   If not NULL, CURRENT_OBJFILE corresponds to the objfile being
+   inspected when the symbol search was requested. */
+
+typedef void (gdbarch_iterate_over_objfiles_in_search_order_ftype) (struct gdbarch *gdbarch, iterate_over_objfiles_in_search_order_cb_ftype *cb, void *cb_data, struct objfile *current_objfile);
+extern void gdbarch_iterate_over_objfiles_in_search_order (struct gdbarch *gdbarch, iterate_over_objfiles_in_search_order_cb_ftype *cb, void *cb_data, struct objfile *current_objfile);
+extern void set_gdbarch_iterate_over_objfiles_in_search_order (struct gdbarch *gdbarch, gdbarch_iterate_over_objfiles_in_search_order_ftype *iterate_over_objfiles_in_search_order);
+
+/* Ravenscar arch-dependent ops. */
+
+extern struct ravenscar_arch_ops * gdbarch_ravenscar_ops (struct gdbarch *gdbarch);
+extern void set_gdbarch_ravenscar_ops (struct gdbarch *gdbarch, struct ravenscar_arch_ops * ravenscar_ops);
+
 /* Definition for an unknown syscall, used basically in error-cases.  */
 #define UNKNOWN_SYSCALL (-1)
 
@@ -1339,15 +1403,9 @@ extern int gdbarch_update_p (struct gdbarch_info info);
 extern struct gdbarch *gdbarch_find_by_info (struct gdbarch_info info);
 
 
-/* Helper function.  Set the global "target_gdbarch" to "gdbarch".
+/* Helper function.  Set the target gdbarch to "gdbarch".  */
 
-   FIXME: kettenis/20031124: Of the functions that follow, only
-   gdbarch_from_bfd is supposed to survive.  The others will
-   dissappear since in the future GDB will (hopefully) be truly
-   multi-arch.  However, for now we're still stuck with the concept of
-   a single active architecture.  */
-
-extern void deprecated_target_gdbarch_select_hack (struct gdbarch *gdbarch);
+extern void set_target_gdbarch (struct gdbarch *gdbarch);
 
 
 /* Register per-architecture data-pointer.
@@ -1392,7 +1450,7 @@ extern void set_gdbarch_from_file (bfd *);
 extern void initialize_current_architecture (void);
 
 /* gdbarch trace variable */
-extern int gdbarch_debug;
+extern unsigned int gdbarch_debug;
 
 extern void gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file);
 

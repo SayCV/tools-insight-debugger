@@ -33,6 +33,7 @@ AC_DEFUN([SC_PATH_TCLCONFIG], [
 
 	    # First check to see if --with-tcl was specified.
 	    case "${host}" in
+		*-*-cygwin*) platDir="win" ;;
 		*) platDir="unix" ;;
 	    esac
 	    if test x"${with_tclconfig}" != x ; then
@@ -164,6 +165,7 @@ AC_DEFUN([SC_PATH_TKCONFIG], [
 
 	    # then check for a private Tk library
 	    case "${host}" in
+		*-*-cygwin*) platDir="win" ;;
 		*) platDir="unix" ;;
 	    esac
 	    if test x"${ac_cv_c_tkconfig}" = x ; then
@@ -288,7 +290,7 @@ AC_DEFUN([SC_LOAD_TCLCONFIG], [
     elif test "`uname -s`" = "Darwin"; then
 	# If Tcl was built as a framework, attempt to use the libraries
 	# from the framework at the given location so that linking works
-	# against Tcl.framework installed in an arbitary location.
+	# against Tcl.framework installed in an arbitrary location.
 	case ${TCL_DEFS} in
 	    *TCL_FRAMEWORK*)
 		if test -f "${TCL_BIN_DIR}/${TCL_LIB_FILE}"; then
@@ -371,7 +373,7 @@ AC_DEFUN([SC_LOAD_TKCONFIG], [
     elif test "`uname -s`" = "Darwin"; then
 	# If Tk was built as a framework, attempt to use the libraries
 	# from the framework at the given location so that linking works
-	# against Tk.framework installed in an arbitary location.
+	# against Tk.framework installed in an arbitrary location.
 	case ${TK_DEFS} in
 	    *TK_FRAMEWORK*)
 		if test -f "${TK_BIN_DIR}/${TK_LIB_FILE}"; then
@@ -813,7 +815,7 @@ AC_DEFUN([SC_ENABLE_LANGINFO], [
 #
 #	Defines the following variable:
 #
-#	MAN_FLAGS -	The apropriate flags for installManPage
+#	MAN_FLAGS -	The appropriate flags for installManPage
 #			according to the user's selection.
 #
 #--------------------------------------------------------------------

@@ -1,7 +1,6 @@
 /* Output generating routines for GDB.
 
-   Copyright (C) 1999-2002, 2004-2005, 2007-2012 Free Software
-   Foundation, Inc.
+   Copyright (C) 1999-2013 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions.
    Written by Fernando Nasser for Cygnus.
@@ -186,6 +185,7 @@ static void default_message (struct ui_out *uiout, int verbosity,
 			     va_list args) ATTRIBUTE_PRINTF (3, 0);
 static void default_wrap_hint (struct ui_out *uiout, char *identstring);
 static void default_flush (struct ui_out *uiout);
+static void default_data_destroy (struct ui_out *uiout);
 
 /* This is the default ui-out implementation functions vector.  */
 
@@ -207,6 +207,7 @@ struct ui_out_impl default_ui_out_impl =
   default_wrap_hint,
   default_flush,
   NULL,
+  default_data_destroy,
   0, /* Does not need MI hacks.  */
 };
 
@@ -255,6 +256,7 @@ static void uo_message (struct ui_out *uiout, int verbosity,
 static void uo_wrap_hint (struct ui_out *uiout, char *identstring);
 static void uo_flush (struct ui_out *uiout);
 static int uo_redirect (struct ui_out *uiout, struct ui_file *outstream);
+static void uo_data_destroy (struct ui_out *uiout);
 
 /* Prototypes for local functions */
 
@@ -265,6 +267,7 @@ static void append_header_to_list (struct ui_out *uiout, int width,
 static int get_next_header (struct ui_out *uiout, int *colno, int *width,
 			    int *alignment, char **colhdr);
 static void clear_header_list (struct ui_out *uiout);
+static void clear_table (struct ui_out *uiout);
 static void verify_field (struct ui_out *uiout, int *fldno, int *width,
 			  int *align);
 
@@ -329,10 +332,7 @@ ui_out_table_end (struct ui_out *uiout)
   uiout->table.flag = 0;
 
   uo_table_end (uiout);
-
-  if (uiout->table.id)
-    xfree (uiout->table.id);
-  clear_header_list (uiout);
+  clear_table (uiout);
 }
 
 void
@@ -644,61 +644,6 @@ ui_out_get_verblvl (struct ui_out *uiout)
   return 0;
 }
 
-#if 0
-void
-ui_out_result_begin (struct ui_out *uiout, char *class)
-{
-}
-
-void
-ui_out_result_end (struct ui_out *uiout)
-{
-}
-
-void
-ui_out_info_begin (struct ui_out *uiout, char *class)
-{
-}
-
-void
-ui_out_info_end (struct ui_out *uiout)
-{
-}
-
-void
-ui_out_notify_begin (struct ui_out *uiout, char *class)
-{
-}
-
-void
-ui_out_notify_end (struct ui_out *uiout)
-{
-}
-
-void
-ui_out_error_begin (struct ui_out *uiout, char *class)
-{
-}
-
-void
-ui_out_error_end (struct ui_out *uiout)
-{
-}
-#endif
-
-#if 0
-void
-gdb_error (ui_out * uiout, int severity, char *format,...)
-{
-  va_list args;
-}
-
-void
-gdb_query (struct ui_out *uiout, int qflags, char *qprompt)
-{
-}
-#endif
-
 int
 ui_out_is_mi_like_p (struct ui_out *uiout)
 {
@@ -805,6 +750,11 @@ default_flush (struct ui_out *uiout)
 {
 }
 
+static void
+default_data_destroy (struct ui_out *uiout)
+{
+}
+
 /* Interface to the implementation functions.  */
 
 void
@@ -841,6 +791,16 @@ uo_table_header (struct ui_out *uiout, int width, enum ui_align align,
   if (!uiout->impl->table_header)
     return;
   uiout->impl->table_header (uiout, width, align, col_name, colhdr);
+}
+
+/* Clear the table associated with UIOUT.  */
+
+static void
+clear_table (struct ui_out *uiout)
+{
+  if (uiout->table.id)
+    xfree (uiout->table.id);
+  clear_header_list (uiout);
 }
 
 void
@@ -957,6 +917,15 @@ uo_redirect (struct ui_out *uiout, struct ui_file *outstream)
   return 0;
 }
 
+void
+uo_data_destroy (struct ui_out *uiout)
+{
+  if (!uiout->impl->data_destroy)
+    return;
+
+  uiout->impl->data_destroy (uiout);
+}
+
 /* local functions */
 
 /* List of column headers manipulation routines.  */
@@ -968,8 +937,8 @@ clear_header_list (struct ui_out *uiout)
     {
       uiout->table.header_next = uiout->table.header_first;
       uiout->table.header_first = uiout->table.header_first->next;
-      if (uiout->table.header_next->colhdr != NULL)
-	xfree (uiout->table.header_next->colhdr);
+      xfree (uiout->table.header_next->colhdr);
+      xfree (uiout->table.header_next->col_name);
       xfree (uiout->table.header_next);
     }
   gdb_assert (uiout->table.header_first == NULL);
@@ -1133,6 +1102,16 @@ ui_out_new (struct ui_out_impl *impl, void *data,
   uiout->table.header_last = NULL;
   uiout->table.header_next = NULL;
   return uiout;
+}
+
+/* Free  UIOUT and the memory areas it references.  */
+
+void
+ui_out_destroy (struct ui_out *uiout)
+{
+  uo_data_destroy (uiout);
+  clear_table (uiout);
+  xfree (uiout);
 }
 
 /* Standard gdb initialization hook.  */

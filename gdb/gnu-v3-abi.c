@@ -1,7 +1,7 @@
 /* Abstraction of GNU v3 abi.
    Contributed by Jim Blandy <jimb@redhat.com>
 
-   Copyright (C) 2001-2003, 2005-2012 Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -27,6 +27,7 @@
 #include "valprint.h"
 #include "c-lang.h"
 #include "exceptions.h"
+#include "typeprint.h"
 
 #include "gdb_assert.h"
 #include "gdb_string.h"
@@ -430,8 +431,9 @@ gnuv3_baseclass_offset (struct type *type, int index,
   ptr_type = builtin_type (gdbarch)->builtin_data_ptr;
 
   /* If it isn't a virtual base, this is easy.  The offset is in the
-     type definition.  */
-  if (!BASETYPE_VIA_VIRTUAL (type, index))
+     type definition.  Likewise for Java, which doesn't really have
+     virtual inheritance in the C++ sense.  */
+  if (!BASETYPE_VIA_VIRTUAL (type, index) || TYPE_CPLUS_REALLY_JAVA (type))
     return TYPE_BASECLASS_BITPOS (type, index) / 8;
 
   /* To access a virtual base, we need to use the vbase offset stored in
@@ -609,7 +611,7 @@ gnuv3_print_method_ptr (const gdb_byte *contents,
     {
       /* Found a non-virtual function: print out the type.  */
       fputs_filtered ("(", stream);
-      c_print_type (type, "", stream, -1, 0);
+      c_print_type (type, "", stream, -1, 0, &type_print_raw_options);
       fputs_filtered (") ", stream);
     }
 
@@ -620,7 +622,12 @@ gnuv3_print_method_ptr (const gdb_byte *contents,
       print_longest (stream, 'd', 1, ptr_value);
     }
   else
-    print_address_demangle (gdbarch, ptr_value, stream, demangle);
+    {
+      struct value_print_options opts;
+
+      get_user_print_options (&opts);
+      print_address_demangle (&opts, gdbarch, ptr_value, stream, demangle);
+    }
 
   if (adjustment)
     {
@@ -798,7 +805,6 @@ compute_vtable_size (htab_t offset_hash,
   struct type *type = check_typedef (value_type (value));
   void **slot;
   struct value_and_voffset search_vo, *current_vo;
-  CORE_ADDR addr = value_address (value) + value_embedded_offset (value);
 
   /* If the object is not dynamic, then we are done; as it cannot have
      dynamic base types either.  */
@@ -890,8 +896,7 @@ print_one_vtable (struct gdbarch *gdbarch, struct value *value,
       if (ex.reason < 0)
 	printf_filtered (_("<error: %s>"), ex.message);
       else
-	print_function_pointer_address (gdbarch, addr, gdb_stdout,
-					opts->addressprint);
+	print_function_pointer_address (opts, gdbarch, addr, gdb_stdout);
       printf_filtered ("\n");
     }
 }
@@ -1065,7 +1070,8 @@ gnuv3_pass_by_reference (struct type *type)
 	   with the mangled name.  We don't have a convenient function
 	   to strip off both leading scope qualifiers and trailing
 	   template arguments yet.  */
-	if (!is_constructor_name (TYPE_FN_FIELD_PHYSNAME (fn, fieldelem)))
+	if (!is_constructor_name (TYPE_FN_FIELD_PHYSNAME (fn, fieldelem))
+	    && !TYPE_FN_FIELD_CONSTRUCTOR (fn, fieldelem))
 	  continue;
 
 	/* If this method takes two arguments, and the second argument is
@@ -1127,4 +1133,5 @@ _initialize_gnu_v3_abi (void)
   init_gnuv3_ops ();
 
   register_cp_abi (&gnu_v3_abi_ops);
+  set_cp_abi_as_auto_default (gnu_v3_abi_ops.shortname);
 }

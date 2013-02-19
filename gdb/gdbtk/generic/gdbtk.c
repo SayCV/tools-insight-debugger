@@ -32,7 +32,7 @@
 #include "annotate.h"
 #include "exceptions.h"
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__CYGWIN__)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
@@ -57,6 +57,10 @@
 #include "gdb_string.h"
 #include "dis-asm.h"
 #include "gdbcmd.h"
+
+#ifdef __CYGWIN32__
+#include <sys/cygwin.h>		/* for cygwin32_attach_handle_to_fd */
+#endif
 
 extern void _initialize_gdbtk (void);
 
@@ -390,7 +394,12 @@ gdbtk_init (void)
   Tcl_SetVar2 (gdbtk_interp, "GDBStartup", "host_name", (char*) host_name, TCL_GLOBAL_ONLY);
   Tcl_SetVar2 (gdbtk_interp, "GDBStartup", "target_name", (char*) target_name, TCL_GLOBAL_ONLY);
   {
+#ifdef __CYGWIN
+    char *srcdir = (char *) alloca (cygwin_posix_to_win32_path_list_buf_size (SRC_DIR));
+    cygwin_posix_to_win32_path_list (SRC_DIR, srcdir);
+#else /* !__CYGWIN */
     char *srcdir = SRC_DIR;
+#endif /* !__CYGWIN */
     Tcl_SetVar2 (gdbtk_interp, "GDBStartup", "srcdir", srcdir, TCL_GLOBAL_ONLY);
   }
 
@@ -573,6 +582,10 @@ gdbtk_init (void)
       external_editor_command = NULL;
     }
 
+#ifdef __CYGWIN32__
+  (void) FreeConsole ();
+#endif
+
   discard_cleanups (old_chain);
 }
 
@@ -682,6 +695,32 @@ _initialize_gdbtk ()
      insight is GOING to run. */
   if (strcmp (interpreter_p, "insight") == 0)
     deprecated_init_ui_hook = gdbtk_init_1;
+#ifdef __CYGWIN__
+  else
+    {
+      DWORD ft = GetFileType (GetStdHandle (STD_INPUT_HANDLE));
+
+      switch (ft)
+	{
+	case FILE_TYPE_DISK:
+	case FILE_TYPE_CHAR:
+	case FILE_TYPE_PIPE:
+	  break;
+	default:
+	  AllocConsole ();
+	  cygwin_attach_handle_to_fd ("/dev/conin", 0,
+				      GetStdHandle (STD_INPUT_HANDLE),
+				      1, GENERIC_READ);
+	  cygwin_attach_handle_to_fd ("/dev/conout", 1,
+				      GetStdHandle (STD_OUTPUT_HANDLE),
+				      0, GENERIC_WRITE);
+	  cygwin_attach_handle_to_fd ("/dev/conout", 2,
+				      GetStdHandle (STD_ERROR_HANDLE),
+				      0, GENERIC_WRITE);
+	  break;
+	}
+    }
+#endif
 }
 
 static void

@@ -69,11 +69,7 @@ itcl::body  VarTree::buildlayer {tlist in} {
 
     set j1 [$c create text $x $y -text "[$var name] = " -fill $colors(name) -anchor w -font global/fixed]
     set x [expr [lindex [$c bbox $j1] 2] + 5]
-    
-    # Make sure the type is one line..
-    set vtype [split [$var type] "\n"]
-    
-    set j2 [$c create text $x $y -text "([lindex $vtype 0])" -fill $colors(type) -anchor w -font global/fixed]
+    set j2 [$c create text $x $y -text "([$var type])" -fill $colors(type) -anchor w -font global/fixed]
     set x [expr [lindex [$c bbox $j2] 2] + 5]
     if {[catch {$var value} val]} {
       # error accessing memory, etc.
@@ -139,7 +135,7 @@ itcl::body  VarTree::update_var {var enabled check} {
     if {[catch {$var value} value]} {
       set color $colors(error)      
     } elseif {[$c itemcget $val -text] != $value} {
-      set color $colors(change)
+      set color $::Colors(change)
     } else {
       set color $colors(value)
     }
@@ -408,7 +404,6 @@ itcl::body  VarTree::_init_data {} {
   set colors(type) "red"
   set colors(error) "red"
   set colors(value) "black"
-  set colors(change) $::Colors(change)
   set colors(disabled) "gray50"
   set colors(line) "gray50"
 

@@ -1,7 +1,6 @@
 /* Support for printing Modula 2 values for GDB, the GNU debugger.
 
-   Copyright (C) 1986, 1988-1989, 1991-1992, 1996, 1998, 2000, 2005-2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -195,18 +194,21 @@ print_unpacked_pointer (struct type *type,
 {
   struct gdbarch *gdbarch = get_type_arch (type);
   struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+  int want_space = 0;
 
   if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
     {
       /* Try to print what function it points to.  */
-      print_function_pointer_address (gdbarch, addr, stream,
-				      options->addressprint);
+      print_function_pointer_address (options, gdbarch, addr, stream);
       /* Return value is irrelevant except for string pointers.  */
       return 0;
     }
 
   if (options->addressprint && options->format != 's')
-    fputs_filtered (paddress (gdbarch, address), stream);
+    {
+      fputs_filtered (paddress (gdbarch, address), stream);
+      want_space = 1;
+    }
 
   /* For a pointer to char or unsigned char, also print the string
      pointed to, unless pointer is null.  */
@@ -215,8 +217,12 @@ print_unpacked_pointer (struct type *type,
       && TYPE_CODE (elttype) == TYPE_CODE_INT
       && (options->format == 0 || options->format == 's')
       && addr != 0)
-    return val_print_string (TYPE_TARGET_TYPE (type), NULL, addr, -1,
-			     stream, options);
+    {
+      if (want_space)
+	fputs_filtered (" ", stream);
+      return val_print_string (TYPE_TARGET_TYPE (type), NULL, addr, -1,
+			       stream, options);
+    }
   
   return 0;
 }
@@ -262,16 +268,14 @@ m2_print_array_contents (struct type *type, const gdb_byte *valaddr,
 			 const struct value_print_options *options,
 			 int len)
 {
-  int eltlen;
   CHECK_TYPEDEF (type);
 
   if (TYPE_LENGTH (type) > 0)
     {
-      eltlen = TYPE_LENGTH (type);
       if (options->prettyprint_arrays)
 	print_spaces_filtered (2 + 2 * recurse, stream);
       /* For an array of chars, print with string syntax.  */
-      if (eltlen == 1 &&
+      if (TYPE_LENGTH (type) == 1 &&
 	  ((TYPE_CODE (type) == TYPE_CODE_INT)
 	   || ((current_language->la_language == language_m2)
 	       && (TYPE_CODE (type) == TYPE_CODE_CHAR)))
@@ -313,8 +317,6 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
   unsigned int i = 0;	/* Number of characters printed.  */
   unsigned len;
   struct type *elttype;
-  unsigned eltlen;
-  LONGEST val;
   CORE_ADDR addr;
 
   CHECK_TYPEDEF (type);
@@ -324,12 +326,11 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
       if (TYPE_LENGTH (type) > 0 && TYPE_LENGTH (TYPE_TARGET_TYPE (type)) > 0)
 	{
 	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
-	  eltlen = TYPE_LENGTH (elttype);
-	  len = TYPE_LENGTH (type) / eltlen;
+	  len = TYPE_LENGTH (type) / TYPE_LENGTH (elttype);
 	  if (options->prettyprint_arrays)
 	    print_spaces_filtered (2 + 2 * recurse, stream);
 	  /* For an array of chars, print with string syntax.  */
-	  if (eltlen == 1 &&
+	  if (TYPE_LENGTH (elttype) == 1 &&
 	      ((TYPE_CODE (elttype) == TYPE_CODE_INT)
 	       || ((current_language->la_language == language_m2)
 		   && (TYPE_CODE (elttype) == TYPE_CODE_CHAR)))
@@ -403,7 +404,6 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 			       options, NULL, 0);
       break;
 
-    case TYPE_CODE_BITSTRING:
     case TYPE_CODE_SET:
       elttype = TYPE_INDEX_TYPE (type);
       CHECK_TYPEDEF (elttype);
@@ -418,13 +418,9 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 	  struct type *range = elttype;
 	  LONGEST low_bound, high_bound;
 	  int i;
-	  int is_bitstring = TYPE_CODE (type) == TYPE_CODE_BITSTRING;
 	  int need_comma = 0;
 
-	  if (is_bitstring)
-	    fputs_filtered ("B'", stream);
-	  else
-	    fputs_filtered ("{", stream);
+	  fputs_filtered ("{", stream);
 
 	  i = get_discrete_bounds (range, &low_bound, &high_bound);
 	maybe_bad_bstring:
@@ -444,9 +440,7 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 		  i = element;
 		  goto maybe_bad_bstring;
 		}
-	      if (is_bitstring)
-		fprintf_filtered (stream, "%d", element);
-	      else if (element)
+	      if (element)
 		{
 		  if (need_comma)
 		    fputs_filtered (", ", stream);
@@ -470,10 +464,7 @@ m2_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 		}
 	    }
 	done:
-	  if (is_bitstring)
-	    fputs_filtered ("'", stream);
-	  else
-	    fputs_filtered ("}", stream);
+	  fputs_filtered ("}", stream);
 	}
       break;
 

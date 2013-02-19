@@ -1,6 +1,6 @@
 /* Target-dependent code for QNX Neutrino x86.
 
-   Copyright (C) 2003-2004, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2003-2013 Free Software Foundation, Inc.
 
    Contributed by QNX Software Systems Ltd.
 
@@ -134,7 +134,6 @@ i386nto_register_area (struct gdbarch *gdbarch,
 		       int regno, int regset, unsigned *off)
 {
   struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
-  int len;
 
   *off = 0;
   if (regset == NTO_REG_GENERAL)

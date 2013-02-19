@@ -97,9 +97,6 @@ itcl::body SrcWin::_build_win {} {
   
   set need_files 1
   
-  combobox::combobox $_statbar.filter -font global/fixed -width 9 -editable false \
-    -command [code $this filter_files] -bg $::Colors(textbg)
-  
   combobox::combobox $_statbar.func -maxheight 15 -font global/fixed\
     -command [code $this goto_func] -bg $::Colors(textbg)
   combobox::combobox $_statbar.mode -width 9 -editable false \
@@ -110,17 +107,13 @@ itcl::body SrcWin::_build_win {} {
   $_statbar.mode list insert end MIXED
   $_statbar.mode list insert end SRC+ASM
 
-  $_statbar.filter list insert end "All Files"
-  $_statbar.filter list insert end "Fortran"
-  $_statbar.filter list insert end "C/C++"
-
   # Workaround: the three comboboxes above sometimes display with
   # height of one pixel. Inserting an invisible frame with the required
   # height "fixes" this...
   frame $_statbar.strut -height 24 -width 10
 
   pack $_statbar.mode -side right -padx 10 -pady 4
-  pack $_statbar.name $_statbar.filter $_statbar.func $_statbar.strut  \
+  pack $_statbar.name $_statbar.func $_statbar.strut  \
       -side left -pady 4 -padx 10
 
   # if user likes control on top...
@@ -167,7 +160,6 @@ itcl::body SrcWin::_build_win {} {
   # balloon help
   foreach i {entry button} {
     balloon register $_statbar.name.$i "Current file name"
-    balloon register $_statbar.filter.$i "File type filter"
     balloon register $_statbar.func.$i "Current function name"
     balloon register $_statbar.mode.$i "Source mode"
   }
@@ -175,10 +167,6 @@ itcl::body SrcWin::_build_win {} {
 
   $_statbar.mode entryset [$twin mode_get]
 
-  #set _filefilter ""
-  $_statbar.filter entryset "[pref get gdb/src/filefilter]"
-  set_file_filter "[pref get gdb/src/filefilter]"
-  
   # time to load the widget with a file.
   # If this is a new widget and the program is
   # not yet being debugged, load the file with "main" in it.
@@ -339,7 +327,7 @@ itcl::body SrcWin::toggle_updates {value} {
 }
 
 # ------------------------------------------------------------------
-#  PRIVATE PUBLIC METHOD: goto_func - function combobox callback
+#  PRIVATE PUBLIC METHOD:  goto_func - function combobox callback
 # ------------------------------------------------------------------
 itcl::body SrcWin::goto_func {w {val ""}} {
   if {$val != ""} {
@@ -367,39 +355,6 @@ itcl::body SrcWin::goto_func {w {val ""}} {
 }
 
 # ------------------------------------------------------------------
-#  PRIVATE METHOD:  set_file_filter - updates the file filter
-# ------------------------------------------------------------------
-itcl::body SrcWin::set_file_filter {val} {
-  
-  if {$val != ""} {
-    if {$val == "Fortran"} {
-      set _filefilter ".f"
-    } elseif {$val == "C/C++"} {
-      set _filefilter ".c"
-    } else {
-      set _filefilter ""
-    }
-    
-    pref setd gdb/src/filefilter "$val"
-  } else {
-    set _filefilter ""
-  }
-}
-
-# ------------------------------------------------------------------
-#  PRIVATE METHOD:  filter_files - file filter combobox callback
-# ------------------------------------------------------------------
-itcl::body SrcWin::filter_files {w {val ""}} {
-  
-  if {$val != ""} {
-    set_file_filter "$val"
-
-    $_statbar.name list delete 0 end
-    fillNameCB 
-  }
-}
-
-# ------------------------------------------------------------------
 #  PUBLIC METHOD:  fillNameCB - fill the name combobox
 #
 #         This method needs to be public, since other parts of
@@ -407,21 +362,13 @@ itcl::body SrcWin::filter_files {w {val ""}} {
 # ------------------------------------------------------------------
 itcl::body SrcWin::fillNameCB {} {
   global _files
-  set allfiles [lsort -nocase [gdb_listfiles]]
+  set allfiles [gdb_listfiles]
   foreach f $allfiles {
     # FIXME: If you reactivate this code add a catch as gdb_find_file can err
     # (P.S.: I don't know why this is commented out)
     #set fullname [gdb_find_file $f]
     #set _files(full,$f) $fullname
     #set _files(short,$fullname) $f
-
-    if {$_filefilter != ""} {
-      set ext [file extension $f]
-      if {[string first $_filefilter [string tolower $ext]] != 0} {
-        continue
-      }
-    }
-    
     $_statbar.name list insert end $f
   }
   set need_files 0

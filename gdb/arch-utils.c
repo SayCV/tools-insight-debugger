@@ -1,6 +1,6 @@
 /* Dynamic architecture support for GDB, the GNU debugger.
 
-   Copyright (C) 1998-2012 Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -31,6 +31,7 @@
 #include "osabi.h"
 #include "target-descriptions.h"
 #include "objfiles.h"
+#include "language.h"
 
 #include "version.h"
 
@@ -505,7 +506,7 @@ gdbarch_update_p (struct gdbarch_info info)
 
   /* If it is the same old architecture, accept the request (but don't
      swap anything).  */
-  if (new_gdbarch == target_gdbarch)
+  if (new_gdbarch == target_gdbarch ())
     {
       if (gdbarch_debug)
 	fprintf_unfiltered (gdb_stdlog, "gdbarch_update_p: "
@@ -521,7 +522,7 @@ gdbarch_update_p (struct gdbarch_info info)
 			"New architecture %s (%s) selected\n",
 			host_address_to_string (new_gdbarch),
 			gdbarch_bfd_arch_info (new_gdbarch)->printable_name);
-  deprecated_target_gdbarch_select_hack (new_gdbarch);
+  set_target_gdbarch (new_gdbarch);
 
   return 1;
 }
@@ -555,7 +556,7 @@ set_gdbarch_from_file (bfd *abfd)
 
   if (gdbarch == NULL)
     error (_("Architecture of file not recognized."));
-  deprecated_target_gdbarch_select_hack (gdbarch);
+  set_target_gdbarch (gdbarch);
 }
 
 /* Initialize the current architecture.  Update the ``set
@@ -756,7 +757,7 @@ get_current_arch (void)
   if (has_stack_frames ())
     return get_frame_arch (get_selected_frame (NULL));
   else
-    return target_gdbarch;
+    return target_gdbarch ();
 }
 
 int
@@ -794,15 +795,13 @@ default_gen_return_address (struct gdbarch *gdbarch,
 }
 
 int
-default_target_signal_to_host (struct gdbarch *gdbarch, enum target_signal ts)
+default_return_in_first_hidden_param_p (struct gdbarch *gdbarch,
+					struct type *type)
 {
-  return target_signal_to_host (ts);
-}
-
-enum target_signal
-default_target_signal_from_host (struct gdbarch *gdbarch, int signo)
-{
-  return target_signal_from_host (signo);
+  /* Usually, the return value's address is stored the in the "first hidden"
+     parameter if the return value should be passed by reference, as
+     specified in ABI.  */
+  return language_pass_by_reference (type);
 }
 
 /* */

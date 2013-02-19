@@ -1,5 +1,5 @@
 /* GDB-specific functions for operating on agent expressions
-   Copyright (C) 1998-2000, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -114,6 +114,12 @@ extern void gen_expr (struct expression *exp, union exp_element **pc,
 		      struct agent_expr *ax, struct axs_value *value);
 
 extern void require_rvalue (struct agent_expr *ax, struct axs_value *value);
+
+struct format_piece;
+extern struct agent_expr *gen_printf (CORE_ADDR, struct gdbarch *,
+				      CORE_ADDR, LONGEST, char *, int,
+				      struct format_piece *,
+				      int, struct expression **);
 
 extern int trace_kludge;
 extern int trace_string_kludge;

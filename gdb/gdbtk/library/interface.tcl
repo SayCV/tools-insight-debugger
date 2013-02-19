@@ -365,12 +365,11 @@ proc gdbtk_tcl_warning {message} {
 
   switch -regexp $message {
         "Unable to find dynamic linker breakpoint function.*" {return}
-	    "Internal error.*" { gdbtk_tcl_fputs_error $message }
+	"Internal error.*" { gdbtk_tcl_fputs_error $message }
         "incomplete CFI.*" { gdbtk_tcl_fputs_error $message }
-	    "RTTI symbol not found for class.*" { gdbtk_tcl_fputs_error $message }
+	"RTTI symbol not found for class.*" { gdbtk_tcl_fputs_error $message }
         "DW_AT.*" { gdbtk_tcl_fputs_error $message }
         "unsupported tag.*" { gdbtk_tcl_fputs_error $message }
-        "Can not parse XML.*" {return}
         default {show_warning $message}
        }
 }
@@ -843,10 +842,6 @@ proc gdbtk_locate_main {{init ""}} {
   set main_names [pref get gdb/main_names]
   foreach main $main_names {
     if {![catch {gdb_loc $main} linespec]} {
-    
-      # Remove the function name - it breaks Fortran
-      lset linespec 1 ""
-      
       set _main_cache $linespec
       break
     }
@@ -862,8 +857,6 @@ proc gdbtk_locate_main {{init ""}} {
   if {$addr == 0x0 && $func == {}} { set _main_cache {} }
 
   #debug "returning $_main_cache"
-  
-  
   return $_main_cache
 }
 

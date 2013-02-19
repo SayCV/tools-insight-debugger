@@ -354,7 +354,7 @@ itcl::body SrcTextWin::enable {on} {
     bind $twin <Double-1> $bnd
     bind $twin <Triple-1> $bnd
     enable_disable_src_tags $twin $status
-    #$twin configure -cursor $glyph
+    $twin configure -cursor $glyph
   }
 
   if {$bwin != ""} {
@@ -362,7 +362,7 @@ itcl::body SrcTextWin::enable {on} {
     bind $bwin <Double-1> $bnd
     bind $bwin <Triple-1> $bnd
     enable_disable_src_tags $bwin $status
-    #$bwin configure -cursor $glyph
+    $bwin configure -cursor $glyph
   }
 }
 
@@ -460,31 +460,31 @@ itcl::body SrcTextWin::enable_disable_src_tags {win how} {
 
   if {[string compare $how browse] == 0} {
     
-    #$win tag bind break_rgn_tag <Enter> { }
-    #$win tag bind break_rgn_tag <Leave> { }
+    $win tag bind break_rgn_tag <Enter> { }
+    $win tag bind break_rgn_tag <Leave> { }
     
     foreach type $bp_types {
-    #  $win tag bind ${type}_tag <Enter> { }
-    #  $win tag bind ${type}_tag <Motion> { }
-    #  $win tag bind ${type}_tag <Leave> { }
+      $win tag bind ${type}_tag <Enter> { }
+      $win tag bind ${type}_tag <Motion> { }
+      $win tag bind ${type}_tag <Leave> { }
     }
 
   } else {
     
-    #$win tag bind break_rgn_tag <Enter> "$win config -cursor $cur1"
-    #$win tag bind break_rgn_tag <Leave> "$win config -cursor $cur2"
+    $win tag bind break_rgn_tag <Enter> "$win config -cursor $cur1"
+    $win tag bind break_rgn_tag <Leave> "$win config -cursor $cur2"
     
     foreach type $bp_types {
-      #$win tag bind ${type}_tag <Enter> "$win config -cursor $cur1"
-      #$win tag bind ${type}_tag <Motion> "$this motion bp %W %x %y"
-      #$win tag bind ${type}_tag <Leave> \
-	#"$this cancelMotion;$win config -cursor $cur2"
+      $win tag bind ${type}_tag <Enter> "$win config -cursor $cur1"
+      $win tag bind ${type}_tag <Motion> "$this motion bp %W %x %y"
+      $win tag bind ${type}_tag <Leave> \
+	"$this cancelMotion;$win config -cursor $cur2"
     }
   }
 
- # $win tag bind tp_tag <Enter> "$win config -cursor $cur1"
- # $win tag bind tp_tag <Motion> "$this motion bp %W %x %y"
- # $win tag bind tp_tag <Leave> "$this cancelMotion;$win config -cursor $cur2"
+  $win tag bind tp_tag <Enter> "$win config -cursor $cur1"
+  $win tag bind tp_tag <Motion> "$this motion bp %W %x %y"
+  $win tag bind tp_tag <Leave> "$this cancelMotion;$win config -cursor $cur2"
 }
 
 # ------------------------------------------------------------------
@@ -2144,7 +2144,7 @@ itcl::body SrcTextWin::do_source_popup { X Y x y } {
 
   $popups(source) add command -label "Open Another Source Window" \
     -command {ManagedWin::open SrcWin -force}
-  $popups(source) add command -label "Goto Source in Simply Fortran" \
+  $popups(source) add command -label "Open Source in external editor" \
     -command [code $parent edit]
 
   tk_popup $popups(source) $X $Y 

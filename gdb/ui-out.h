@@ -1,7 +1,6 @@
 /* Output generating routines for GDB.
 
-   Copyright (C) 1999-2003, 2005, 2007-2012 Free Software Foundation,
-   Inc.
+   Copyright (C) 1999-2013 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions.
    Written by Fernando Nasser for Cygnus.
@@ -142,30 +141,6 @@ extern int ui_out_test_flags (struct ui_out *uiout, int mask);
 extern int ui_out_query_field (struct ui_out *uiout, int colno,
 			       int *width, int *alignment, char **col_name);
 
-#if 0
-extern void ui_out_result_begin (struct ui_out *uiout, char *class);
-
-extern void ui_out_result_end (struct ui_out *uiout);
-
-extern void ui_out_info_begin (struct ui_out *uiout, char *class);
-
-extern void ui_out_info_end (struct ui_out *uiout);
-
-extern void ui_out_notify_begin (struct ui_out *uiout, char *class);
-
-extern void ui_out_notify_end (struct ui_out *uiout);
-
-extern void ui_out_error_begin (struct ui_out *uiout, char *class);
-
-extern void ui_out_error_end (struct ui_out *uiout);
-#endif
-
-#if 0
-extern void gdb_error (struct ui_out *uiout, int severity, char *format, ...);
-
-extern void gdb_query (struct ui_out *uiout, int qflags, char *qprompt);
-#endif
-
 /* HACK: Code in GDB is currently checking to see the type of ui_out
    builder when determining which output to produce.  This function is
    a hack to encapsulate that test.  Once GDB manages to separate the
@@ -222,6 +197,7 @@ typedef void (wrap_hint_ftype) (struct ui_out * uiout, char *identstring);
 typedef void (flush_ftype) (struct ui_out * uiout);
 typedef int (redirect_ftype) (struct ui_out * uiout,
 			      struct ui_file * outstream);
+typedef void (data_destroy_ftype) (struct ui_out *uiout);
 
 /* ui-out-impl */
 
@@ -246,6 +222,7 @@ struct ui_out_impl
     wrap_hint_ftype *wrap_hint;
     flush_ftype *flush;
     redirect_ftype *redirect;
+    data_destroy_ftype *data_destroy;
     int is_mi_like_p;
   };
 
@@ -260,6 +237,10 @@ extern void uo_field_string (struct ui_out *uiout, int fldno, int width,
 extern struct ui_out *ui_out_new (struct ui_out_impl *impl,
 				  void *data,
 				  int flags);
+
+/* Destroy a ui_out object.  */
+
+extern void ui_out_destroy (struct ui_out *uiout);
 
 /* Redirect the ouptut of a ui_out object temporarily.  */
 

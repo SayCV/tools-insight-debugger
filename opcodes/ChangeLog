@@ -1,193 +1,179 @@
-2012-04-27  David S. Miller  <davem@davemloft.net>
+2013-02-15  Markos Chandras  <markos.chandras@imgtec.com>
 
-	* sparc-dis.c (v9a_asr_reg_names): Add 'cfr'.
-	* sparc-opc.c (sparc_opcodes): Add rd/wr cases for %cfr.
+	* metag-dis.c: Initialize outf->bytes_per_chunk to 4
+	which also makes the disassembler output be in little
+	endian like it should be.
 
-	* sparc-opc.c (sparc_opcodes): Add 'wr X, %pause' and 'pause'.
-	* sparc-dis.c (v9a_asr_reg_names): Add 'pause'.
+2013-02-14  Yufeng Zhang  <yufeng.zhang@arm.com>
 
-	* sparc-opc.c (CBCOND): New define.
-	(CBCOND_XCC): Likewise.
-	(cbcond): New helper macro.
-	(sparc_opcodes): Add compare-and-branch instructions.
+	* aarch64-opc.c (aarch64_prfops): Change unnamed operation 'name'
+	fields to NULL.
+	(aarch64_print_operand): Adjust the printing for AARCH64_OPND_PRFOP.
 
-	* sparc-dis.c (print_insn_sparc): Handle ')'.
-	* sparc-opc.c (sparc_opcodes): Add crypto instructions.
+2013-02-13  Maciej W. Rozycki  <macro@codesourcery.com>
 
-	* sparc-opc.c (sparc_opcodes): Rework table to put HWCAP values
-	into new struct sparc_opcode 'hwcaps' field instead of 'flags'.
+	* mips-dis.c (is_compressed_mode_p): Only match symbols from the
+	section disassembled.
 
-2012-04-12  David S. Miller  <davem@davemloft.net>
+2013-02-11  Kyrylo Tkachov  <kyrylo.tkachov@arm.com>
 
-	* sparc-dis.c (X_DISP10): Define.
-	(print_insn_sparc): Handle '='.
+	* arm-dis.c: Update strht pattern.
 
-2012-04-01  Mike Frysinger  <vapier@gentoo.org>
+2013-02-09  Jürgen Urban  <JuergenUrban@gmx.de>
 
-	* bfin-dis.c (fmtconst): Replace decimal handling with a single
-	sprintf call and the '*' field width.
+	* mips-opc.c (mips_builtin_opcodes): Enable l.d and s.d macros for
+	single-float.  Disable ll, lld, sc and scd for EE.  Disable the
+	trunc.w.s macro for EE.
 
-2012-03-23  Maxim Kuvyrkov  <maxim@codesourcery.com>
+2013-02-06  Sandra Loosemore  <sandra@codesourcery.com>
+            Andrew Jenner <andrew@codesourcery.com>
 
-	* mips-dis.c (mips_arch_choices): Add entry for Broadcom XLP.
+	Based on patches from Altera Corporation.
 
-2012-03-16  Alan Modra  <amodra@gmail.com>
+	* Makefile.am (TARGET_LIBOPCODES_CFILES): Add nios2-dis.c and
+	nios2-opc.c.
+	* Makefile.in: Regenerated.
+	* configure.in: Add case for bfd_nios2_arch.
+	* configure: Regenerated.
+	* disassemble.c (ARCH_nios2): Define.
+	(disassembler): Add case for bfd_arch_nios2.
+	* nios2-dis.c: New file.
+	* nios2-opc.c: New file.
 
-	* ppc-dis.c (PPC_OPC_SEGS, PPC_OP_TO_SEG): Delete.
-	(powerpc_opcd_indices): Bump array size.
-	(disassemble_init_powerpc): Set powerpc_opcd_indices entries
-	corresponding to unused opcodes to following entry.
-	(lookup_powerpc): New function, extracted and optimised from..
-	(print_insn_powerpc): ..here.
+2013-02-04  Alan Modra  <amodra@gmail.com>
 
-2012-03-15  Alan Modra  <amodra@gmail.com>
-	    James Lemke  <jwlemke@codesourcery.com>
-
-	* disassemble.c (disassemble_init_for_target): Handle ppc init.
-	* ppc-dis.c (private): New var.
-	(powerpc_init_dialect): Don't return calloc failure, instead use
-	private.
-	(PPC_OPCD_SEGS, PPC_OP_TO_SEG): Define.
-	(powerpc_opcd_indices): New array.
-	(disassemble_init_powerpc): New function.
-	(print_insn_big_powerpc): Don't init dialect here.
-	(print_insn_little_powerpc): Likewise.
-	(print_insn_powerpc): Start search using powerpc_opcd_indices.
-
-2012-03-10  Edmar Wienskoski  <edmar@freescale.com>
-
-	* ppc-dis.c (ppc_opts): Add entries for "e5500" and "e6500".
-	* ppc-opc.c (insert_ls, TMR, ESYNC, XSYNCLE_MASK): New.
-	(PPCVEC2, PPCTMR, E6500): New short names.
-	(powerpc_opcodes): Add vabsdub, vabsduh, vabsduw, dni, mvidsplt,
-	mviwsplt, icblq., mftmr, mttmr, dcblq., miso, lvexbx, lvexhx,
-	lvexwx, stvexbx, stvexhx, stvexwx, lvepx, lvepxl, stvepx, stvepxl,
-	lvtrx, lvtrxl, lvtlx, lvtlxl, stvfrx, stvfrxl, stvflx, stvflxl,
-	lvswx, lvswxl, stvswx, stvswxl, lvsm mnemonics. Accept LS, ESYNC
-	optional operands on sync instruction for E6500 target.
-
-2012-03-08  Andreas Krebbel  <Andreas.Krebbel@de.ibm.com>
-
-	* s390-opc.txt: Set instruction type of pku to SS_L2RDRD.
-
-2012-02-27  Alan Modra  <amodra@gmail.com>
-
-	* mt-dis.c: Regenerate.
-
-2012-02-27  Alan Modra  <amodra@gmail.com>
-
-	* v850-opc.c (extract_v8): Rearrange to make it obvious this
-	is the inverse of corresponding insert function.
-	(extract_d22, extract_u9, extract_r4): Likewise.
-	(extract_d9): Correct sign extension.
-	(extract_d16_15): Don't assume "long" is 32 bits, and don't
-	rely on implementation defined behaviour for shift right of
-	signed types.
-	(extract_d16_16, extract_d17_16, extract_i9): Likewise.
-	(extract_d23): Likewise, and correct mask.
-
-2012-02-27  Alan Modra  <amodra@gmail.com>
-
-	* crx-dis.c (print_arg): Mask constant to 32 bits.
-	* crx-opc.c (cst4_map): Use int array.
-
-2012-02-27  Alan Modra  <amodra@gmail.com>
-
-	* arc-dis.c (BITS): Don't use shifts to mask off bits.
-	(FIELDD): Sign extend with xor,sub.
-
-2012-02-25  Walter Lee  <walt@tilera.com>
-
-	* tilegx-opc.c: Handle TILEGX_OPC_LD4S_TLS and TILEGX_OPC_LD_TLS.
-	* tilepro-opc.c: Handle TILEPRO_OPC_LW_TLS and
-	TILEPRO_OPC_LW_TLS_SN.
-
-2012-02-21  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* i386-opc.h (HLEPrefixNone): New.
-	(HLEPrefixLock): Likewise.
-	(HLEPrefixAny): Likewise.
-	(HLEPrefixRelease): Likewise.
-
-2012-02-08  H.J. Lu  <hongjiu.lu@intel.com>
-
-	* i386-dis.c (HLE_Fixup1): New.
-	(HLE_Fixup2): Likewise.
-	(HLE_Fixup3): Likewise.
-	(Ebh1): Likewise.
-	(Evh1): Likewise.
-	(Ebh2): Likewise.
-	(Evh2): Likewise.
-	(Ebh3): Likewise.
-	(Evh3): Likewise.
-	(MOD_C6_REG_7): Likewise.
-	(MOD_C7_REG_7): Likewise.
-	(RM_C6_REG_7): Likewise.
-	(RM_C7_REG_7): Likewise.
-	(XACQUIRE_PREFIX): Likewise.
-	(XRELEASE_PREFIX): Likewise.
-	(dis386): Use Ebh1/Evh1 on add, adc, and, btc, btr, bts,
-	cmpxchg, dec, inc, neg, not, or, sbb, sub, xor and xadd. Use
-	Ebh2/Evh2 on xchg.  Use Ebh3/Evh3 on mov.
-	(reg_table): Use Ebh1/Evh1 on add, adc, and, dec, inc, neg,
-	not, or, sbb, sub and xor.  Use Ebh3/Evh3 on mov.  Use
-	MOD_C6_REG_7 and MOD_C7_REG_7.
-	(mod_table): Add MOD_C6_REG_7 and MOD_C7_REG_7.
-	(rm_table): Add RM_C6_REG_7 and RM_C7_REG_7.  Add xend and
-	xtest.
-	(prefix_name): Handle XACQUIRE_PREFIX and XRELEASE_PREFIX.
-	(CMPXCHG8B_Fixup): Handle HLE prefix on cmpxchg8b.
-
-	* i386-gen.c (cpu_flag_init): Add CPU_HLE_FLAGS and
-	CPU_RTM_FLAGS.
-	(cpu_flags): Add CpuHLE and CpuRTM.
-	(opcode_modifiers): Add HLEPrefixOk.
-
-	* i386-opc.h (CpuHLE): New.
-	(CpuRTM): Likewise.
-	(HLEPrefixOk): Likewise.
-	(i386_cpu_flags): Add cpuhle and cpurtm.
-	(i386_opcode_modifier): Add hleprefixok.
-
-	* i386-opc.tbl: Add HLEPrefixOk=3 to mov.  Add HLEPrefixOk to
-	add, adc, and, btc, btr, bts, cmpxchg, dec, inc, neg, not, or,
-	sbb, sub, xor and xadd.  Add HLEPrefixOk=2 to xchg with memory
-	operand.  Add xacquire, xrelease, xabort, xbegin, xend and
-	xtest.
-	* i386-init.h: Regenerated.
-	* i386-tbl.h: Likewise.
-
-2012-01-24  DJ Delorie  <dj@redhat.com>
-
-	* rl78-decode.opc (rl78_decode_opcode): Add NOT1.
+	* po/POTFILES.in: Regenerate.
 	* rl78-decode.c: Regenerate.
+	* rx-decode.c: Regenerate.
 
-2012-01-17  James Murray  <jsm@jsm-net.demon.co.uk>
+2013-01-30  Yufeng Zhang  <yufeng.zhang@arm.com>
 
-	PR binutils/10173
-	* cr16-dis.c (print_arg): Test symtab_size not num_symbols.
+	* aarch64-tbl.h (aarch64_opcode_table): Flag sshll, sshll2, ushll and
+	ushll2 with F_HAS_ALIAS.  Add entries for sxtl, sxtl2, uxtl and uxtl2.
+	* aarch64-asm.c (convert_xtl_to_shll): New function.
+	(convert_to_real): Handle OP_SXTL, OP_SXTL2, OP_UXTL and OP_UXTL2 by
+	calling convert_xtl_to_shll.
+	* aarch64-dis.c (convert_shll_to_xtl): New function.
+	(convert_to_alias): Handle OP_SXTL, OP_SXTL2, OP_UXTL and OP_UXTL2 by
+	calling convert_shll_to_xtl.
+	* aarch64-gen.c: Update copyright year.
+	* aarch64-asm-2.c: Re-generate.
+	* aarch64-dis-2.c: Re-generate.
+	* aarch64-opc-2.c: Re-generate.
 
-2012-01-17  Andreas Schwab  <schwab@linux-m68k.org>
+2013-01-24  Nick Clifton  <nickc@redhat.com>
 
-	* m68k-opc.c (m68k_opcodes): Fix entries for pmove with BADx/BACx
-	register and move them after pmove with PSR/PCSR register.
+	* v850-dis.c: Add support for e3v5 architecture.
+	* v850-opc.c: Likewise.
 
-2012-01-13  H.J. Lu  <hongjiu.lu@intel.com>
+2013-01-17  Yufeng Zhang  <yufeng.zhang@arm.com>
 
-	* i386-dis.c (mod_table): Add vmfunc.
+	* aarch64-asm.c (aarch64_ins_advsimd_imm_modified): Handle 8-bit MOVI.
+	* aarch64-dis.c (aarch64_ext_advsimd_imm_modified): Likewise.
+	* aarch64-opc.c (operand_general_constraint_met_p): For
+	AARCH64_MOD_LSL, move the range check on the shift amount before the
+	alignment check; change to call set_sft_amount_out_of_range_error
+	instead of set_imm_out_of_range_error.
+	* aarch64-tbl.h (QL_SIMD_IMM_B): Replace NIL with LSL.
+	(aarch64_opcode_table): Remove the OP enumerator from the asimdimm
+	8-bit MOVI entry; change the 2nd operand from SIMD_IMM to
+	SIMD_IMM_SFT.
 
-	* i386-gen.c (cpu_flag_init): Add CPU_VMFUNC_FLAGS.
-	(cpu_flags): CpuVMFUNC.
+2013-01-16  H.J. Lu  <hongjiu.lu@intel.com>
 
-	* i386-opc.h (CpuVMFUNC): New.
-	(i386_cpu_flags): Add cpuvmfunc.
+	* i386-gen.c (operand_type_init): Add OPERAND_TYPE_IMM32_64.
 
-	* i386-opc.tbl: Add vmfunc.
 	* i386-init.h: Regenerated.
 	* i386-tbl.h: Likewise.
 
-For older changes see ChangeLog-2011
+2013-01-15  Nick Clifton  <nickc@redhat.com>
+
+	* v850-dis.c (get_operand_value): Sign extend V850E_IMMEDIATE
+	values.
+	* v850-opc.c (IMM16LO): Add V850_OPERAND_SIGNED attribute.
+
+2013-01-14  Will Newton <will.newton@imgtec.com>
+
+	* metag-dis.c (REG_WIDTH): Increase to 64.
+
+2013-01-10  Peter Bergner <bergner@vnet.ibm.com>
+
+	* ppc-dis.c (ppc_opts): Add "power8", "pwr8" and "htm" entries.
+	* ppc-opc.c (HTM_R, HTM_SI, XRTRB_MASK, XRTRARB_MASK, XRTLRARB_MASK,
+	XRTARARB_MASK, XRTBFRARB_MASK, XRCL, POWER8, PPCHTM): New defines.
+	(SH6): Update.
+	<"tabort.", "tabortdc.", "tabortdci.", "tabortwc.",
+	"tabortwci.", "tbegin.", "tcheck", "tend.", "trechkpt.",
+	"treclaim.", "tsr.">: Add POWER8 HTM opcodes.
+	<"tendall.", "tresume.", "tsuspend.">: Add POWER8 HTM extended opcodes.
+
+2013-01-10  Will Newton <will.newton@imgtec.com>
+
+	* Makefile.am: Add Meta.
+	* configure.in: Add Meta.
+	* disassemble.c: Add Meta support.
+	* metag-dis.c: New file.
+	* Makefile.in: Regenerate.
+	* configure: Regenerate.
+
+2013-01-07  Kaushik Phatak  <kaushik.phatak@kpitcummins.com>
+
+	* cr16-dis.c (make_instruction): Rename to cr16_make_instruction.
+	(match_opcode): Rename to cr16_match_opcode.
+
+2013-01-04  Juergen Urban <JuergenUrban@gmx.de>
+
+	* mips-dis.c: Add names for CP0 registers of r5900.
+	* mips-opc.c: Add M_SQ_AB and M_LQ_AB to support larger range for
+	instructions sq and lq.
+	Add support for MIPS r5900 CPU.
+	Add support for 128 bit MMI (Multimedia Instructions).
+	Add support for EE instructions (Emotion Engine).
+	Disable unsupported floating point instructions (64 bit and
+	undefined compare operations).
+	Enable instructions of MIPS ISA IV which are supported by r5900.
+	Disable 64 bit co processor instructions.
+	Disable 64 bit multiplication and division instructions.
+	Disable instructions for co-processor 2 and 3, because these are
+	not supported (preparation for later VU0 support (Vector Unit)).
+	Disable cvt.w.s because this behaves like trunc.w.s and the
+	correct execution can't be ensured on r5900.
+	Add trunc.w.s using the opcode encoding of cvt.w.s on r5900. This
+	will confuse less developers and compilers.
+
+2013-01-04  Yufeng Zhang  <yufeng.zhang@arm.com>
+
+	* aarch64-opc.c (aarch64_print_operand): Change to print
+	AARCH64_OPND_IMM_MOV in hexadecimal in the instruction and in decimal
+	in comment.
+	* aarch64-tbl.h (aarch64_opcode_table): Remove the 'F_PSEUDO' flag
+	from the opcode entries of OP_MOV_IMM_LOG, OP_MOV_IMM_WIDEN and
+	OP_MOV_IMM_WIDE.
+
+2013-01-04  Yufeng Zhang  <yufeng.zhang@arm.com>
+
+	* aarch64-opc.c (aarch64_prfops): Update to support PLIL1KEEP,
+	PLIL1STRM, PLIL2KEEP, PLIL2STRM, PLIL3KEEP and PLIL3STRM.
+
+2013-01-02  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* i386-gen.c (process_copyright): Update copyright year to 2013.
+
+2013-01-02  Kaushik Phatak  <kaushik.phatak@kpitcummins.com>
+
+	* cr16-dis.c (match_opcode,make_instruction): Remove static
+	declaration.
+	(dwordU,wordU): Moved typedefs to opcode/cr16.h
+	(cr16_words,cr16_allWords,cr16_currInsn): Added prefix 'cr16_'.
+
+For older changes see ChangeLog-2012
 
+Copyright (C) 2013 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
+
 Local Variables:
 mode: change-log
 left-margin: 8

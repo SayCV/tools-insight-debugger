@@ -53,7 +53,7 @@
 
 static bfd_reloc_status_type
 init_insn_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-		 PTR data, asection *input_section, bfd *output_bfd,
+		 void * data, asection *input_section, bfd *output_bfd,
 		 bfd_vma *prelocation, bfd_vma *pinsn)
 {
   bfd_vma relocation;
@@ -97,7 +97,7 @@ static bfd_reloc_status_type
 sparc_elf_notsup_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 			arelent *reloc_entry ATTRIBUTE_UNUSED,
 			asymbol *symbol ATTRIBUTE_UNUSED,
-			PTR data ATTRIBUTE_UNUSED,
+			void * data ATTRIBUTE_UNUSED,
 			asection *input_section ATTRIBUTE_UNUSED,
 			bfd *output_bfd ATTRIBUTE_UNUSED,
 			char **error_message ATTRIBUTE_UNUSED)
@@ -109,7 +109,7 @@ sparc_elf_notsup_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 
 static bfd_reloc_status_type
 sparc_elf_wdisp16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			 PTR data, asection *input_section, bfd *output_bfd,
+			 void * data, asection *input_section, bfd *output_bfd,
 			 char **error_message ATTRIBUTE_UNUSED)
 {
   bfd_vma relocation;
@@ -136,7 +136,7 @@ sparc_elf_wdisp16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
 static bfd_reloc_status_type
 sparc_elf_wdisp10_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			 PTR data, asection *input_section, bfd *output_bfd,
+			 void * data, asection *input_section, bfd *output_bfd,
 			 char **error_message ATTRIBUTE_UNUSED)
 {
   bfd_vma relocation;
@@ -164,7 +164,7 @@ sparc_elf_wdisp10_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
 static bfd_reloc_status_type
 sparc_elf_hix22_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-		       PTR data, asection *input_section, bfd *output_bfd,
+		       void * data, asection *input_section, bfd *output_bfd,
 		       char **error_message ATTRIBUTE_UNUSED)
 {
   bfd_vma relocation;
@@ -190,7 +190,7 @@ sparc_elf_hix22_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
 static bfd_reloc_status_type
 sparc_elf_lox10_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-		       PTR data, asection *input_section, bfd *output_bfd,
+		       void * data, asection *input_section, bfd *output_bfd,
 		       char **error_message ATTRIBUTE_UNUSED)
 {
   bfd_vma relocation;
@@ -1207,9 +1207,9 @@ _bfd_sparc_elf_create_dynamic_sections (bfd *dynobj,
   if (!_bfd_elf_create_dynamic_sections (dynobj, info))
     return FALSE;
 
-  htab->sdynbss = bfd_get_section_by_name (dynobj, ".dynbss");
+  htab->sdynbss = bfd_get_linker_section (dynobj, ".dynbss");
   if (!info->shared)
-    htab->srelbss = bfd_get_section_by_name (dynobj, ".rela.bss");
+    htab->srelbss = bfd_get_linker_section (dynobj, ".rela.bss");
 
   if (htab->is_vxworks)
     {
@@ -1433,7 +1433,7 @@ _bfd_sparc_elf_check_relocs (bfd *abfd, struct bfd_link_info *info,
 						TRUE);
 	      if (h == NULL)
 		return FALSE;
-	      
+
 	      /* Fake a STT_GNU_IFUNC symbol.  */
 	      h->type = STT_GNU_IFUNC;
 	      h->def_regular = 1;
@@ -1873,6 +1873,29 @@ _bfd_sparc_elf_gc_mark_hook (asection *sec,
 	return NULL;
       }
 
+  /* FIXME: The test here, in check_relocs and in relocate_section
+     dealing with TLS optimization, ought to be !info->executable.  */
+  if (info->shared)
+    {
+      switch (SPARC_ELF_R_TYPE (rel->r_info))
+	{
+	case R_SPARC_TLS_GD_CALL:
+	case R_SPARC_TLS_LDM_CALL:
+	  /* This reloc implicitly references __tls_get_addr.  We know
+	     another reloc will reference the same symbol as the one
+	     on this reloc, so the real symbol and section will be
+	     gc marked when processing the other reloc.  That lets
+	     us handle __tls_get_addr here.  */
+	  h = elf_link_hash_lookup (elf_hash_table (info), "__tls_get_addr",
+				    FALSE, FALSE, TRUE);
+	  BFD_ASSERT (h != NULL);
+	  h->mark = 1;
+	  if (h->u.weakdef != NULL)
+	    h->u.weakdef->mark = 1;
+	  sym = NULL;
+	}
+    }
+
   return _bfd_elf_gc_mark_hook (sec, info, rel, h, sym);
 }
 
@@ -2191,7 +2214,7 @@ _bfd_sparc_elf_adjust_dynamic_symbol (struct bfd_link_info *info,
    dynamic relocs.  */
 
 static bfd_boolean
-allocate_dynrelocs (struct elf_link_hash_entry *h, PTR inf)
+allocate_dynrelocs (struct elf_link_hash_entry *h, void * inf)
 {
   struct bfd_link_info *info;
   struct _bfd_sparc_elf_link_hash_table *htab;
@@ -2471,7 +2494,7 @@ allocate_local_dynrelocs (void **slot, void *inf)
 /* Find any dynamic relocs that apply to read-only sections.  */
 
 static bfd_boolean
-readonly_dynrelocs (struct elf_link_hash_entry *h, PTR inf)
+readonly_dynrelocs (struct elf_link_hash_entry *h, void * inf)
 {
   struct _bfd_sparc_elf_link_hash_entry *eh;
   struct _bfd_sparc_elf_dyn_relocs *p;
@@ -2532,7 +2555,7 @@ _bfd_sparc_elf_size_dynamic_sections (bfd *output_bfd,
       /* Set the contents of the .interp section to the interpreter.  */
       if (info->executable)
 	{
-	  s = bfd_get_section_by_name (dynobj, ".interp");
+	  s = bfd_get_linker_section (dynobj, ".interp");
 	  BFD_ASSERT (s != NULL);
 	  s->size = htab->dynamic_interpreter_size;
 	  s->contents = (unsigned char *) htab->dynamic_interpreter;
@@ -2627,7 +2650,7 @@ _bfd_sparc_elf_size_dynamic_sections (bfd *output_bfd,
 
   /* Allocate global sym .plt and .got entries, and space for global
      sym dynamic relocs.  */
-  elf_link_hash_traverse (&htab->elf, allocate_dynrelocs, (PTR) info);
+  elf_link_hash_traverse (&htab->elf, allocate_dynrelocs, info);
 
   /* Allocate .plt and .got entries, and space for local symbols.  */
   htab_traverse (htab->loc_hash_table, allocate_local_dynrelocs, info);
@@ -2742,8 +2765,7 @@ _bfd_sparc_elf_size_dynamic_sections (bfd *output_bfd,
       /* If any dynamic relocs apply to a read-only section,
 	 then we need a DT_TEXTREL entry.  */
       if ((info->flags & DF_TEXTREL) == 0)
-	elf_link_hash_traverse (&htab->elf, readonly_dynrelocs,
-				(PTR) info);
+	elf_link_hash_traverse (&htab->elf, readonly_dynrelocs, info);
 
       if (info->flags & DF_TEXTREL)
 	{
@@ -2986,7 +3008,7 @@ _bfd_sparc_elf_relocate_section (bfd *output_bfd,
 	      if (h == NULL)
 		abort ();
 
-	      /* Set STT_GNU_IFUNC symbol value.  */ 
+	      /* Set STT_GNU_IFUNC symbol value.  */
 	      h->root.u.def.value = sym->st_value;
 	      h->root.u.def.section = sec;
 	    }
@@ -3013,7 +3035,7 @@ _bfd_sparc_elf_relocate_section (bfd *output_bfd,
 
       if (sec != NULL && discarded_section (sec))
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
-					 rel, relend, howto, contents);
+					 rel, 1, relend, howto, 0, contents);
 
       if (info->relocatable)
 	continue;
@@ -3279,7 +3301,7 @@ _bfd_sparc_elf_relocate_section (bfd *output_bfd,
 	      if (h == NULL)
 		break;
 	    }
-	  /* PR 7027: We need similar behaviour for 64-bit binaries.  */ 
+	  /* PR 7027: We need similar behaviour for 64-bit binaries.  */
 	  else if (r_type == R_SPARC_WPLT30 && h == NULL)
 	    break;
 	  else
@@ -4127,7 +4149,7 @@ do_relocation:
 	      {
 		const char *name;
 
-		/* The Solaris native linker silently disregards overflows. 
+		/* The Solaris native linker silently disregards overflows.
 		   We don't, but this breaks stabs debugging info, whose
 		   relocations are only 32-bits wide.  Ignore overflows in
 		   this case and also for discarded entries.  */
@@ -4496,8 +4518,8 @@ _bfd_sparc_elf_finish_dynamic_symbol (bfd *output_bfd,
       /* This symbols needs a copy reloc.  Set it up.  */
       BFD_ASSERT (h->dynindx != -1);
 
-      s = bfd_get_section_by_name (h->root.u.def.section->owner,
-				   ".rela.bss");
+      s = bfd_get_linker_section (h->root.u.def.section->owner,
+				  ".rela.bss");
       BFD_ASSERT (s != NULL);
 
       rela.r_offset = (h->root.u.def.value
@@ -4512,7 +4534,7 @@ _bfd_sparc_elf_finish_dynamic_symbol (bfd *output_bfd,
      _GLOBAL_OFFSET_TABLE_ is not absolute: it is relative to the
      ".got" section.  Likewise _PROCEDURE_LINKAGE_TABLE_ and ".plt".  */
   if (sym != NULL
-      && (strcmp (h->root.root.string, "_DYNAMIC") == 0
+      && (h == htab->elf.hdynamic
 	  || (!htab->is_vxworks
 	      && (h == htab->elf.hgot || h == htab->elf.hplt))))
     sym->st_shndx = SHN_ABS;
@@ -4719,7 +4741,7 @@ finish_local_dynamic_symbol (void **slot, void *inf)
   struct elf_link_hash_entry *h
     = (struct elf_link_hash_entry *) *slot;
   struct bfd_link_info *info
-    = (struct bfd_link_info *) inf; 
+    = (struct bfd_link_info *) inf;
 
   return _bfd_sparc_elf_finish_dynamic_symbol (info->output_bfd, info,
 					       h, NULL);
@@ -4736,13 +4758,13 @@ _bfd_sparc_elf_finish_dynamic_sections (bfd *output_bfd, struct bfd_link_info *i
   BFD_ASSERT (htab != NULL);
   dynobj = htab->elf.dynobj;
 
-  sdyn = bfd_get_section_by_name (dynobj, ".dynamic");
+  sdyn = bfd_get_linker_section (dynobj, ".dynamic");
 
   if (elf_hash_table (info)->dynamic_sections_created)
     {
       asection *splt;
 
-      splt = bfd_get_section_by_name (dynobj, ".plt");
+      splt = htab->elf.splt;
       BFD_ASSERT (splt != NULL && sdyn != NULL);
 
       if (!sparc_finish_dyn (output_bfd, info, dynobj, sdyn, splt))

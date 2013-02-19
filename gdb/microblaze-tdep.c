@@ -1,6 +1,6 @@
 /* Target-dependent code for Xilinx MicroBlaze.
 
-   Copyright 2009-2012 Free Software Foundation, Inc.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -79,7 +79,7 @@ static const char *microblaze_register_names[] =
 
 #define MICROBLAZE_NUM_REGS ARRAY_SIZE (microblaze_register_names)
 
-static int microblaze_debug_flag = 0;
+static unsigned int microblaze_debug_flag = 0;
 
 static void
 microblaze_debug (const char *fmt, ...)
@@ -123,7 +123,7 @@ microblaze_register_type (struct gdbarch *gdbarch, int regnum)
 static unsigned long
 microblaze_fetch_instruction (CORE_ADDR pc)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch);
+  enum bfd_endian byte_order = gdbarch_byte_order (target_gdbarch ());
   gdb_byte buf[4];
 
   /* If we can't read the instruction at PC, return zero.  */
@@ -173,7 +173,6 @@ static struct microblaze_frame_cache *
 microblaze_alloc_frame_cache (void)
 {
   struct microblaze_frame_cache *cache;
-  int i;
 
   cache = FRAME_OBSTACK_ZALLOC (struct microblaze_frame_cache);
 
@@ -231,7 +230,7 @@ microblaze_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
   const char *name;
   CORE_ADDR func_addr, func_end, addr, stop, prologue_end_addr = 0;
   unsigned long insn;
-  int rn, rd, ra, rb, imm;
+  int rd, ra, rb, imm;
   enum microblaze_instr op;
   int flags = 0;
   int save_hidden_pointer_found = 0;
@@ -461,7 +460,7 @@ microblaze_frame_cache (struct frame_info *next_frame, void **this_cache)
 {
   struct microblaze_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (next_frame);
-  CORE_ADDR func, pc, fp;
+  CORE_ADDR func;
   int rn;
 
   if (*this_cache)
@@ -612,7 +611,7 @@ microblaze_store_return_value (struct type *type, struct regcache *regcache,
 }
 
 static enum return_value_convention
-microblaze_return_value (struct gdbarch *gdbarch, struct type *func_type,
+microblaze_return_value (struct gdbarch *gdbarch, struct value *function,
 			 struct type *type, struct regcache *regcache,
 			 gdb_byte *readbuf, const gdb_byte *writebuf)
 {
@@ -740,13 +739,13 @@ _initialize_microblaze_tdep (void)
   register_gdbarch_init (bfd_arch_microblaze, microblaze_gdbarch_init);
 
   /* Debug this files internals.  */
-  add_setshow_zinteger_cmd ("microblaze", class_maintenance,
-			    &microblaze_debug_flag, _("\
+  add_setshow_zuinteger_cmd ("microblaze", class_maintenance,
+			     &microblaze_debug_flag, _("\
 Set microblaze debugging."), _("\
 Show microblaze debugging."), _("\
 When non-zero, microblaze specific debugging is enabled."),
-			    NULL,
-			    NULL, 
-			    &setdebuglist, &showdebuglist);
+			     NULL,
+			     NULL,
+			     &setdebuglist, &showdebuglist);
 
 }

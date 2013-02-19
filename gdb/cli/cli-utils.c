@@ -1,6 +1,6 @@
 /* CLI utilities.
 
-   Copyright (c) 2011-2012 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -285,4 +285,18 @@ extract_arg (char **arg)
   copy[*arg - result] = '\0';
 
   return copy;
+}
+
+/* See documentation in cli-utils.h.  */
+
+int
+check_for_argument (char **str, char *arg, int arg_len)
+{
+  if (strncmp (*str, arg, arg_len) == 0
+      && ((*str)[arg_len] == '\0' || isspace ((*str)[arg_len])))
+    {
+      *str += arg_len;
+      return 1;
+    }
+  return 0;
 }

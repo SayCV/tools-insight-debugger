@@ -246,8 +246,6 @@ PrintTextCmd(clientData, interp, argc, argv)
     int maxHeight;
     DLine *prevPtr;
     Pixmap pixmap;
-    int bottomY = 0;		/* Initialization needed only to stop
-				 * compiler warnings. */
 
     DOCINFOA *lpdi = (DOCINFOA *) ckalloc(sizeof(DOCINFOA));
     TkTextIndex first, last;
@@ -357,6 +355,7 @@ PrintTextCmd(clientData, interp, argc, argv)
 
     /* Make the text widget big enough for all the
     text to be seen. */
+
 #if (TCL_MAJOR_VERSION >= 8) && (TCL_MINOR_VERSION >= 5)
     numLines = TkBTreeNumLines(textPtr->sharedTextPtr->tree,textPtr);
     TkTextMakeByteIndex(textPtr->sharedTextPtr->tree, textPtr, 0, 0, &first);
@@ -373,7 +372,6 @@ PrintTextCmd(clientData, interp, argc, argv)
     TkTextMakeIndex(textPtr->tree, numLines, 100, &last);
     TkTextChanged(textPtr, &first, &last);
 #endif
-
     /*
      * Set the display info flag to out-of-date.
      */
@@ -443,12 +441,11 @@ PrintTextCmd(clientData, interp, argc, argv)
     /*
      * Pitch the info again.
      */
-#if (TCL_MAJOR_VERSION >= 8) && (TCL_MINOR_VERSION >= 5)
+    #if (TCL_MAJOR_VERSION >= 8) && (TCL_MINOR_VERSION >= 5)
     TkTextChanged(textPtr->sharedTextPtr,textPtr, &first, &last);
-#else
+    #else
     TkTextChanged(textPtr, &first, &last);
-#endif
-
+    #endif
     /*
      * Display info not valid anymore.
      */
@@ -546,7 +543,7 @@ DisplayDLineToDrawable(textPtr, dlPtr, prevPtr, drawable)
 		    dlPtr->baseline - dlPtr->spaceAbove, display, (Drawable)drawable,
 		    dlPtr->y + dlPtr->spaceAbove);
 	    }
-        #endif
+	    #endif
 	}
     }
 

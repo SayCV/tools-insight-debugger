@@ -1,4 +1,4 @@
-# Copyright 2012 Free Software Foundation, Inc.
+# Copyright 2012-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,11 +15,9 @@
 
 if { [skip_cplus_tests] } { continue }
 
-set testfile dispcxx
-set srcfile ${testfile}.cc
-set binfile ${objdir}/${subdir}/${testfile}
+standard_testfile .cc
 
-if [get_compiler_info ${binfile} "c++"] {
+if [get_compiler_info "c++"] {
     untested dispcxx.exp
     return -1
 }

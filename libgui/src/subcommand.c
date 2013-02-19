@@ -34,7 +34,7 @@ subcommand_deleted (ClientData cd)
    table.  */
 static int
 subcommand_implementation (ClientData cd, Tcl_Interp *interp,
-			   int argc,CONST84 char *argv[])
+			   int argc, CONST84 char *argv[])
 {
   struct subcommand_clientdata *data = (struct subcommand_clientdata *) cd;
   const struct ide_subcommand_table *commands = data->commands;

@@ -1,6 +1,5 @@
 # Makefile for regression testing the GNU debugger.
-# Copyright 1992-1996, 1998-2000, 2002-2005, 2007-2012 Free Software
-# Foundation, Inc.
+# Copyright 1992-2013 Free Software Foundation, Inc.
 
 # This file is part of GDB.
 
@@ -215,6 +214,7 @@ subdirs:
 clean mostlyclean:
 	-rm -f *~ core *.o a.out xgdb *.x *.grt bigcore.corefile .gdb_history
 	-rm -f core.* *.tf *.cl *.py tracecommandsscript copy1.txt zzz-gdbscript
+	-rm -f *.dwo *.dwp
 	if [ x"${ALL_SUBDIRS}" != x ] ; then \
 	    for dir in ${ALL_SUBDIRS}; \
 	    do \

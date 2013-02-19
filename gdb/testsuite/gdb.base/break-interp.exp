@@ -1,4 +1,4 @@
-# Copyright 2010-2012 Free Software Foundation, Inc.
+# Copyright 2010-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ set binfile_lib ${objdir}/${subdir}/${test}.so
 set srcfile "${test}-main.c"
 set srcfile_lib "${test}-lib.c"
 
-if [get_compiler_info ${binfile_lib}] {
+if [get_compiler_info] {
     return -1
 }
 

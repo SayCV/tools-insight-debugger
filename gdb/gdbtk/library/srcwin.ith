@@ -75,11 +75,8 @@ itcl::class SrcWin {
     method _update {loc}
     method get_top {}
     method _set_tag_to_stack {}
-    method set_file_filter {val}
-    method filter_files {w {val ""}}
     proc _choose_window {file}
     variable _statbar
-    variable _filefilter
     variable _status
     variable _toolbar
     variable _statusframe

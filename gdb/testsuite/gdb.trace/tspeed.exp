@@ -1,4 +1,4 @@
-# Copyright 2011-2012 Free Software Foundation, Inc.
+# Copyright 2011-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +15,8 @@
 
 load_lib "trace-support.exp"
 
-set testfile "tspeed"
-set srcfile ${testfile}.c
+standard_testfile
 set executable $testfile
-set binfile $objdir/$subdir/$executable
 
 set ipalib [get_in_proc_agent]
 

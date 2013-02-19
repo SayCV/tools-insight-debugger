@@ -1,6 +1,6 @@
 /* Low level packing and unpacking of values for GDB, the GNU Debugger.
 
-   Copyright (C) 1986-2000, 2002-2012 Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -841,7 +841,6 @@ value_actual_type (struct value *value, int resolve_simple_types,
 		   int *real_type_found)
 {
   struct value_print_options opts;
-  struct value *target;
   struct type *result;
 
   get_user_print_options (&opts);
@@ -851,8 +850,12 @@ value_actual_type (struct value *value, int resolve_simple_types,
   result = value_type (value);
   if (opts.objectprint)
     {
-      if (TYPE_CODE (result) == TYPE_CODE_PTR
+      /* If result's target type is TYPE_CODE_STRUCT, proceed to
+	 fetch its rtti type.  */
+      if ((TYPE_CODE (result) == TYPE_CODE_PTR
 	  || TYPE_CODE (result) == TYPE_CODE_REF)
+	  && TYPE_CODE (check_typedef (TYPE_TARGET_TYPE (result)))
+	     == TYPE_CODE_STRUCT)
         {
           struct type *real_type;
 
@@ -1034,15 +1037,14 @@ value_contents_equal (struct value *val1, struct value *val2)
 {
   struct type *type1;
   struct type *type2;
-  int len;
 
   type1 = check_typedef (value_type (val1));
   type2 = check_typedef (value_type (val2));
-  len = TYPE_LENGTH (type1);
-  if (len != TYPE_LENGTH (type2))
+  if (TYPE_LENGTH (type1) != TYPE_LENGTH (type2))
     return 0;
 
-  return (memcmp (value_contents (val1), value_contents (val2), len) == 0);
+  return (memcmp (value_contents (val1), value_contents (val2),
+		  TYPE_LENGTH (type1)) == 0);
 }
 
 int
@@ -1195,11 +1197,6 @@ int
 deprecated_value_modifiable (struct value *value)
 {
   return value->modifiable;
-}
-void
-deprecated_set_value_modifiable (struct value *value, int modifiable)
-{
-  value->modifiable = modifiable;
 }
 
 /* Return a mark in the value chain.  All values allocated after the
@@ -1715,6 +1712,29 @@ lookup_only_internalvar (const char *name)
   return NULL;
 }
 
+/* Complete NAME by comparing it to the names of internal variables.
+   Returns a vector of newly allocated strings, or NULL if no matches
+   were found.  */
+
+VEC (char_ptr) *
+complete_internalvar (const char *name)
+{
+  VEC (char_ptr) *result = NULL;
+  struct internalvar *var;
+  int len;
+
+  len = strlen (name);
+
+  for (var = internalvars; var; var = var->next)
+    if (strncmp (var->name, name, len) == 0)
+      {
+	char *r = xstrdup (var->name);
+
+	VEC_safe_push (char_ptr, result, r);
+      }
+
+  return result;
+}
 
 /* Create an internal variable with name NAME and with a void value.
    NAME should not normally include a dollar sign.  */
@@ -2233,11 +2253,17 @@ show_convenience (char *ignore, int from_tty)
       printf_filtered (("\n"));
     }
   if (!varseen)
-    printf_unfiltered (_("No debugger convenience variables now defined.\n"
-			 "Convenience variables have "
-			 "names starting with \"$\";\n"
-			 "use \"set\" as in \"set "
-			 "$foo = 5\" to define them.\n"));
+    {
+      /* This text does not mention convenience functions on purpose.
+	 The user can't create them except via Python, and if Python support
+	 is installed this message will never be printed ($_streq will
+	 exist).  */
+      printf_unfiltered (_("No debugger convenience variables now defined.\n"
+			   "Convenience variables have "
+			   "names starting with \"$\";\n"
+			   "use \"set\" as in \"set "
+			   "$foo = 5\" to define them.\n"));
+    }
 }
 
 /* Extract a value as a C number (either long or double).
@@ -3297,27 +3323,37 @@ coerce_array (struct value *arg)
 }
 
 
-/* Return true if the function returning the specified type is using
-   the convention of returning structures in memory (passing in the
-   address as a hidden first parameter).  */
+/* Return the return value convention that will be used for the
+   specified type.  */
 
-int
-using_struct_return (struct gdbarch *gdbarch,
-		     struct type *func_type, struct type *value_type)
+enum return_value_convention
+struct_return_convention (struct gdbarch *gdbarch,
+			  struct value *function, struct type *value_type)
 {
   enum type_code code = TYPE_CODE (value_type);
 
   if (code == TYPE_CODE_ERROR)
     error (_("Function return type unknown."));
 
-  if (code == TYPE_CODE_VOID)
+  /* Probe the architecture for the return-value convention.  */
+  return gdbarch_return_value (gdbarch, function, value_type,
+			       NULL, NULL, NULL);
+}
+
+/* Return true if the function returning the specified type is using
+   the convention of returning structures in memory (passing in the
+   address as a hidden first parameter).  */
+
+int
+using_struct_return (struct gdbarch *gdbarch,
+		     struct value *function, struct type *value_type)
+{
+  if (TYPE_CODE (value_type) == TYPE_CODE_VOID)
     /* A void return value is never in memory.  See also corresponding
        code in "print_return_value".  */
     return 0;
 
-  /* Probe the architecture for the return-value convention.  */
-  return (gdbarch_return_value (gdbarch, func_type, value_type,
-				NULL, NULL, NULL)
+  return (struct_return_convention (gdbarch, function, value_type)
 	  != RETURN_VALUE_REGISTER_CONVENTION);
 }
 
@@ -3341,14 +3377,19 @@ void
 _initialize_values (void)
 {
   add_cmd ("convenience", no_class, show_convenience, _("\
-Debugger convenience (\"$foo\") variables.\n\
-These variables are created when you assign them values;\n\
-thus, \"print $foo=1\" gives \"$foo\" the value 1.  Values may be any type.\n\
+Debugger convenience (\"$foo\") variables and functions.\n\
+Convenience variables are created when you assign them values;\n\
+thus, \"set $foo=1\" gives \"$foo\" the value 1.  Values may be any type.\n\
 \n\
 A few convenience variables are given values automatically:\n\
 \"$_\"holds the last address examined with \"x\" or \"info lines\",\n\
-\"$__\" holds the contents of the last address examined with \"x\"."),
-	   &showlist);
+\"$__\" holds the contents of the last address examined with \"x\"."
+#ifdef HAVE_PYTHON
+"\n\n\
+Convenience functions are defined via the Python API."
+#endif
+	   ), &showlist);
+  add_alias_cmd ("conv", "convenience", no_class, 1, &showlist);
 
   add_cmd ("values", no_set_class, show_values, _("\
 Elements of value history around item number IDX (or last ten)."),

@@ -1,6 +1,6 @@
 /* Target-dependent code for the Renesas RL78 for GDB, the GNU debugger.
 
-   Copyright (C) 2011-2012 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
    Contributed by Red Hat, Inc.
 
@@ -616,7 +616,7 @@ check_for_saved (void *result_untyped, pv_t addr, CORE_ADDR size,
   if (value.kind == pvk_register
       && value.k == 0
       && pv_is_register (addr, RL78_SP_REGNUM)
-      && size == register_size (target_gdbarch, value.reg))
+      && size == register_size (target_gdbarch (), value.reg))
     result->reg_offset[value.reg] = addr.k;
 }
 
@@ -643,7 +643,7 @@ rl78_analyze_prologue (CORE_ADDR start_pc,
       result->reg_offset[rn] = 1;
     }
 
-  stack = make_pv_area (RL78_SP_REGNUM, gdbarch_addr_bit (target_gdbarch));
+  stack = make_pv_area (RL78_SP_REGNUM, gdbarch_addr_bit (target_gdbarch ()));
   back_to = make_cleanup_free_pv_area (stack);
 
   /* The call instruction has saved the return address on the stack.  */
@@ -934,7 +934,7 @@ rl78_register_sim_regno (struct gdbarch *gdbarch, int regnum)
 
 static enum return_value_convention
 rl78_return_value (struct gdbarch *gdbarch,
-		   struct type *func_type,
+		   struct value *function,
 		   struct type *valtype,
 		   struct regcache *regcache,
 		   gdb_byte *readbuf, const gdb_byte *writebuf)
@@ -1021,7 +1021,6 @@ rl78_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
       struct type *value_type = value_enclosing_type (args[i]);
       int len = TYPE_LENGTH (value_type);
       int container_len = (len + 1) & ~1;
-      int offset;
 
       sp -= container_len;
       write_memory (rl78_make_data_address (sp),

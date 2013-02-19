@@ -1,6 +1,6 @@
 /* SystemTap probe support for GDB.
 
-   Copyright (C) 2012 Free Software Foundation, Inc.
+   Copyright (C) 2012-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -53,7 +53,7 @@ static const struct probe_ops stap_probe_ops;
 /* Should we display debug information for the probe's argument expression
    parsing?  */
 
-static int stap_expression_debug = 0;
+static unsigned int stap_expression_debug = 0;
 
 /* The various possibilities of bitness defined for a probe's argument.
 
@@ -154,7 +154,7 @@ static void stap_parse_argument_conditionally (struct stap_parse_info *p);
 
 /* Returns 1 if *S is an operator, zero otherwise.  */
 
-static int stap_is_operator (char op);
+static int stap_is_operator (const char *op);
 
 static void
 show_stapexpressiondebug (struct ui_file *file, int from_tty,
@@ -209,111 +209,107 @@ stap_get_operator_prec (enum exp_opcode op)
 /* Given S, read the operator in it and fills the OP pointer with its code.
    Return 1 on success, zero if the operator was not recognized.  */
 
-static int
-stap_get_opcode (const char **s, enum exp_opcode *op)
+static enum exp_opcode
+stap_get_opcode (const char **s)
 {
   const char c = **s;
-  int ret = 1;
+  enum exp_opcode op;
 
   *s += 1;
 
   switch (c)
     {
     case '*':
-      *op = BINOP_MUL;
+      op = BINOP_MUL;
       break;
 
     case '/':
-      *op = BINOP_DIV;
+      op = BINOP_DIV;
       break;
 
     case '%':
-      *op = BINOP_REM;
+      op = BINOP_REM;
     break;
 
     case '<':
-      *op = BINOP_LESS;
+      op = BINOP_LESS;
       if (**s == '<')
 	{
 	  *s += 1;
-	  *op = BINOP_LSH;
+	  op = BINOP_LSH;
 	}
       else if (**s == '=')
 	{
 	  *s += 1;
-	  *op = BINOP_LEQ;
+	  op = BINOP_LEQ;
 	}
       else if (**s == '>')
 	{
 	  *s += 1;
-	  *op = BINOP_NOTEQUAL;
+	  op = BINOP_NOTEQUAL;
 	}
     break;
 
     case '>':
-      *op = BINOP_GTR;
+      op = BINOP_GTR;
       if (**s == '>')
 	{
 	  *s += 1;
-	  *op = BINOP_RSH;
+	  op = BINOP_RSH;
 	}
       else if (**s == '=')
 	{
 	  *s += 1;
-	  *op = BINOP_GEQ;
+	  op = BINOP_GEQ;
 	}
     break;
 
     case '|':
-      *op = BINOP_BITWISE_IOR;
+      op = BINOP_BITWISE_IOR;
       if (**s == '|')
 	{
 	  *s += 1;
-	  *op = BINOP_LOGICAL_OR;
+	  op = BINOP_LOGICAL_OR;
 	}
     break;
 
     case '&':
-      *op = BINOP_BITWISE_AND;
+      op = BINOP_BITWISE_AND;
       if (**s == '&')
 	{
 	  *s += 1;
-	  *op = BINOP_LOGICAL_AND;
+	  op = BINOP_LOGICAL_AND;
 	}
     break;
 
     case '^':
-      *op = BINOP_BITWISE_XOR;
+      op = BINOP_BITWISE_XOR;
       break;
 
     case '!':
-      *op = UNOP_LOGICAL_NOT;
+      op = UNOP_LOGICAL_NOT;
       break;
 
     case '+':
-      *op = BINOP_ADD;
+      op = BINOP_ADD;
       break;
 
     case '-':
-      *op = BINOP_SUB;
+      op = BINOP_SUB;
       break;
 
     case '=':
-      if (**s != '=')
-	{
-	  ret = 0;
-	  break;
-	}
-      *op = BINOP_EQUAL;
+      gdb_assert (**s == '=');
+      op = BINOP_EQUAL;
       break;
 
     default:
-      /* We didn't find any operator.  */
-      *s -= 1;
-      return 0;
+      internal_error (__FILE__, __LINE__,
+		      _("Invalid opcode in expression `%s' for SystemTap"
+			"probe"), *s);
     }
 
-  return ret;
+  return op;
 }
 
 /* Given the bitness of the argument, represented by B, return the
@@ -562,12 +558,7 @@ stap_parse_single_operand (struct stap_parse_info *p)
 
   /* Suffixes for the parser.  */
   const char *const_suffix = gdbarch_stap_integer_suffix (gdbarch);
-  const char *reg_suffix = gdbarch_stap_register_suffix (gdbarch);
-  const char *reg_ind_suffix
-    = gdbarch_stap_register_indirection_suffix (gdbarch);
   int const_suffix_len = const_suffix ? strlen (const_suffix) : 0;
-  int reg_suffix_len = reg_suffix ? strlen (reg_suffix) : 0;
-  int reg_ind_suffix_len = reg_ind_suffix ? strlen (reg_ind_suffix) : 0;
 
   /* We first try to parse this token as a "special token".  */
   if (gdbarch_stap_parse_special_token_p (gdbarch))
@@ -778,7 +769,7 @@ stap_parse_argument_1 (struct stap_parse_info *p, int has_lhs,
       enum exp_opcode opcode;
       enum stap_operand_prec cur_prec;
 
-      if (!stap_is_operator (*p->arg))
+      if (!stap_is_operator (p->arg))
 	error (_("Invalid operator `%c' on expression `%s'."), *p->arg,
 	       p->saved_arg);
 
@@ -787,7 +778,7 @@ stap_parse_argument_1 (struct stap_parse_info *p, int has_lhs,
 	 operator.  If this operator's precedence is lower than PREC, we
 	 should return and not advance the expression buffer pointer.  */
       tmp_exp_buf = p->arg;
-      stap_get_opcode (&tmp_exp_buf, &opcode);
+      opcode = stap_get_opcode (&tmp_exp_buf);
 
       cur_prec = stap_get_operator_prec (opcode);
       if (cur_prec < prec)
@@ -808,7 +799,7 @@ stap_parse_argument_1 (struct stap_parse_info *p, int has_lhs,
 
       /* While we still have operators, try to parse another
 	 right-side, but using the current right-side as a left-side.  */
-      while (*p->arg && stap_is_operator (*p->arg))
+      while (*p->arg && stap_is_operator (p->arg))
 	{
 	  enum exp_opcode lookahead_opcode;
 	  enum stap_operand_prec lookahead_prec;
@@ -816,7 +807,7 @@ stap_parse_argument_1 (struct stap_parse_info *p, int has_lhs,
 	  /* Saving the current expression buffer position.  The explanation
 	     is the same as above.  */
 	  tmp_exp_buf = p->arg;
-	  stap_get_opcode (&tmp_exp_buf, &lookahead_opcode);
+	  lookahead_opcode = stap_get_opcode (&tmp_exp_buf);
 	  lookahead_prec = stap_get_operator_prec (lookahead_opcode);
 
 	  if (lookahead_prec <= prec)
@@ -867,7 +858,6 @@ stap_parse_argument (const char **arg, struct type *atype,
 		     struct gdbarch *gdbarch)
 {
   struct stap_parse_info p;
-  volatile struct gdb_exception e;
   struct cleanup *back_to;
 
   /* We need to initialize the expression buffer, in order to begin
@@ -913,10 +903,10 @@ stap_parse_argument (const char **arg, struct type *atype,
    this information.  */
 
 static void
-stap_parse_probe_arguments (struct stap_probe *probe, struct objfile *objfile)
+stap_parse_probe_arguments (struct stap_probe *probe)
 {
   const char *cur;
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch = get_objfile_arch (probe->p.objfile);
 
   gdb_assert (!probe->args_parsed);
   cur = probe->args_u.text;
@@ -1001,15 +991,14 @@ stap_parse_probe_arguments (struct stap_probe *probe, struct objfile *objfile)
    argument string.  */
 
 static unsigned
-stap_get_probe_argument_count (struct probe *probe_generic,
-			       struct objfile *objfile)
+stap_get_probe_argument_count (struct probe *probe_generic)
 {
   struct stap_probe *probe = (struct stap_probe *) probe_generic;
 
   gdb_assert (probe_generic->pops == &stap_probe_ops);
 
   if (!probe->args_parsed)
-    stap_parse_probe_arguments (probe, objfile);
+    stap_parse_probe_arguments (probe);
 
   gdb_assert (probe->args_parsed);
   return VEC_length (stap_probe_arg_s, probe->args_u.vec);
@@ -1019,18 +1008,43 @@ stap_get_probe_argument_count (struct probe *probe_generic,
    otherwise.  */
 
 static int
-stap_is_operator (char op)
+stap_is_operator (const char *op)
 {
-  return (op == '+' || op == '-' || op == '*' || op == '/'
-	  || op == '>' || op == '<' || op == '!' || op == '^'
-	  || op == '|' || op == '&' || op == '%' || op == '=');
+  int ret = 1;
+
+  switch (*op)
+    {
+    case '*':
+    case '/':
+    case '%':
+    case '^':
+    case '!':
+    case '+':
+    case '-':
+    case '<':
+    case '>':
+    case '|':
+    case '&':
+      break;
+
+    case '=':
+      if (op[1] != '=')
+	ret = 0;
+      break;
+
+    default:
+      /* We didn't find any operator.  */
+      ret = 0;
+    }
+
+  return ret;
 }
 
 static struct stap_probe_arg *
-stap_get_arg (struct stap_probe *probe, struct objfile *objfile, unsigned n)
+stap_get_arg (struct stap_probe *probe, unsigned n)
 {
   if (!probe->args_parsed)
-    stap_parse_probe_arguments (probe, objfile);
+    stap_parse_probe_arguments (probe);
 
   return VEC_index (stap_probe_arg_s, probe->args_u.vec, n);
 }
@@ -1039,8 +1053,7 @@ stap_get_arg (struct stap_probe *probe, struct objfile *objfile, unsigned n)
    corresponding to it.  Assertion is thrown if N does not exist.  */
 
 static struct value *
-stap_evaluate_probe_argument (struct probe *probe_generic,
-			      struct objfile *objfile, unsigned n)
+stap_evaluate_probe_argument (struct probe *probe_generic, unsigned n)
 {
   struct stap_probe *stap_probe = (struct stap_probe *) probe_generic;
   struct stap_probe_arg *arg;
@@ -1048,7 +1061,7 @@ stap_evaluate_probe_argument (struct probe *probe_generic,
 
   gdb_assert (probe_generic->pops == &stap_probe_ops);
 
-  arg = stap_get_arg (stap_probe, objfile, n);
+  arg = stap_get_arg (stap_probe, n);
   return evaluate_subexp_standard (arg->atype, arg->aexpr, &pos, EVAL_NORMAL);
 }
 
@@ -1056,9 +1069,8 @@ stap_evaluate_probe_argument (struct probe *probe_generic,
    Assertion is thrown if N does not exist.  */
 
 static void
-stap_compile_to_ax (struct probe *probe_generic, struct objfile *objfile,
-		    struct agent_expr *expr, struct axs_value *value,
-		    unsigned n)
+stap_compile_to_ax (struct probe *probe_generic, struct agent_expr *expr,
+		    struct axs_value *value, unsigned n)
 {
   struct stap_probe *stap_probe = (struct stap_probe *) probe_generic;
   struct stap_probe_arg *arg;
@@ -1066,7 +1078,7 @@ stap_compile_to_ax (struct probe *probe_generic, struct objfile *objfile,
 
   gdb_assert (probe_generic->pops == &stap_probe_ops);
 
-  arg = stap_get_arg (stap_probe, objfile, n);
+  arg = stap_get_arg (stap_probe, n);
 
   pc = arg->aexpr->elts;
   gen_expr (arg->aexpr, &pc, expr, value);
@@ -1109,20 +1121,24 @@ compute_probe_arg (struct gdbarch *arch, struct internalvar *ivar,
   struct frame_info *frame = get_selected_frame (_("No frame selected"));
   CORE_ADDR pc = get_frame_pc (frame);
   int sel = (int) (uintptr_t) data;
-  struct objfile *objfile;
   struct probe *pc_probe;
+  const struct sym_probe_fns *pc_probe_fns;
   unsigned n_args;
 
   /* SEL == -1 means "_probe_argc".  */
   gdb_assert (sel >= -1);
 
-  pc_probe = find_probe_by_pc (pc, &objfile);
+  pc_probe = find_probe_by_pc (pc);
   if (pc_probe == NULL)
     error (_("No SystemTap probe at PC %s"), core_addr_to_string (pc));
 
-  n_args
-    = objfile->sf->sym_probe_fns->sym_get_probe_argument_count (objfile,
-								pc_probe);
+  gdb_assert (pc_probe->objfile != NULL);
+  gdb_assert (pc_probe->objfile->sf != NULL);
+  gdb_assert (pc_probe->objfile->sf->sym_probe_fns != NULL);
+
+  pc_probe_fns = pc_probe->objfile->sf->sym_probe_fns;
+
+  n_args = pc_probe_fns->sym_get_probe_argument_count (pc_probe);
   if (sel == -1)
     return value_from_longest (builtin_type (arch)->builtin_int, n_args);
 
@@ -1130,9 +1146,7 @@ compute_probe_arg (struct gdbarch *arch, struct internalvar *ivar,
     error (_("Invalid probe argument %d -- probe has %u arguments available"),
 	   sel, n_args);
 
-  return objfile->sf->sym_probe_fns->sym_evaluate_probe_argument (objfile,
-								  pc_probe,
-								  sel);
+  return pc_probe_fns->sym_evaluate_probe_argument (pc_probe, sel);
 }
 
 /* This is called to compile one of the $_probe_arg* convenience
@@ -1144,35 +1158,39 @@ compile_probe_arg (struct internalvar *ivar, struct agent_expr *expr,
 {
   CORE_ADDR pc = expr->scope;
   int sel = (int) (uintptr_t) data;
-  struct objfile *objfile;
   struct probe *pc_probe;
-  int n_probes;
+  const struct sym_probe_fns *pc_probe_fns;
+  int n_args;
 
   /* SEL == -1 means "_probe_argc".  */
   gdb_assert (sel >= -1);
 
-  pc_probe = find_probe_by_pc (pc, &objfile);
+  pc_probe = find_probe_by_pc (pc);
   if (pc_probe == NULL)
     error (_("No SystemTap probe at PC %s"), core_addr_to_string (pc));
 
-  n_probes
-    = objfile->sf->sym_probe_fns->sym_get_probe_argument_count (objfile,
-								pc_probe);
+  gdb_assert (pc_probe->objfile != NULL);
+  gdb_assert (pc_probe->objfile->sf != NULL);
+  gdb_assert (pc_probe->objfile->sf->sym_probe_fns != NULL);
+
+  pc_probe_fns = pc_probe->objfile->sf->sym_probe_fns;
+
+  n_args = pc_probe_fns->sym_get_probe_argument_count (pc_probe);
+
   if (sel == -1)
     {
       value->kind = axs_rvalue;
       value->type = builtin_type (expr->gdbarch)->builtin_int;
-      ax_const_l (expr, n_probes);
+      ax_const_l (expr, n_args);
       return;
     }
 
   gdb_assert (sel >= 0);
-  if (sel >= n_probes)
+  if (sel >= n_args)
     error (_("Invalid probe argument %d -- probe has %d arguments available"),
-	   sel, n_probes);
+	   sel, n_args);
 
-  objfile->sf->sym_probe_fns->sym_compile_to_ax (objfile, pc_probe,
-						 expr, value, sel);
+  pc_probe_fns->sym_compile_to_ax (pc_probe, expr, value, sel);
 }
 
 
@@ -1275,7 +1293,6 @@ handle_stap_probe (struct objfile *objfile, struct sdt_note *el,
   bfd *abfd = objfile->obfd;
   int size = bfd_get_arch_size (abfd) / 8;
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   struct type *ptr_type = builtin_type (gdbarch)->builtin_data_ptr;
   CORE_ADDR base_ref;
   const char *probe_args = NULL;
@@ -1283,6 +1300,7 @@ handle_stap_probe (struct objfile *objfile, struct sdt_note *el,
 
   ret = obstack_alloc (&objfile->objfile_obstack, sizeof (*ret));
   ret->p.pops = &stap_probe_ops;
+  ret->p.objfile = objfile;
 
   /* Provider and the name of the probe.  */
   ret->p.provider = &el->data[3 * size];
@@ -1397,6 +1415,12 @@ stap_get_probes (VEC (probe_p) **probesp, struct objfile *objfile)
   struct sdt_note *iter;
   unsigned save_probesp_len = VEC_length (probe_p, *probesp);
 
+  if (objfile->separate_debug_objfile_backlink != NULL)
+    {
+      /* This is a .debug file, not the objfile itself.  */
+      return;
+    }
+
   if (!elf_tdata (obfd)->sdt_note_head)
     {
       /* There isn't any probe here.  */
@@ -1461,14 +1485,15 @@ stap_gen_info_probes_table_header (VEC (info_probe_column_s) **heads)
 
 static void
 stap_gen_info_probes_table_values (struct probe *probe_generic,
-				   struct objfile *objfile,
 				   VEC (const_char_ptr) **ret)
 {
   struct stap_probe *probe = (struct stap_probe *) probe_generic;
-  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct gdbarch *gdbarch;
   const char *val = NULL;
 
   gdb_assert (probe_generic->pops == &stap_probe_ops);
+
+  gdbarch = get_objfile_arch (probe->p.objfile);
 
   if (probe->sem_addr)
     val = print_core_address (gdbarch, probe->sem_addr);
@@ -1508,15 +1533,15 @@ _initialize_stap_probe (void)
 {
   VEC_safe_push (probe_ops_cp, all_probe_ops, &stap_probe_ops);
 
-  add_setshow_zinteger_cmd ("stap-expression", class_maintenance,
-			    &stap_expression_debug,
-			    _("Set SystemTap expression debugging."),
-			    _("Show SystemTap expression debugging."),
-			    _("When non-zero, the internal representation "
-			      "of SystemTap expressions will be printed."),
-			    NULL,
-			    show_stapexpressiondebug,
-			    &setdebuglist, &showdebuglist);
+  add_setshow_zuinteger_cmd ("stap-expression", class_maintenance,
+			     &stap_expression_debug,
+			     _("Set SystemTap expression debugging."),
+			     _("Show SystemTap expression debugging."),
+			     _("When non-zero, the internal representation "
+			       "of SystemTap expressions will be printed."),
+			     NULL,
+			     show_stapexpressiondebug,
+			     &setdebuglist, &showdebuglist);
 
   create_internalvar_type_lazy ("_probe_argc", &probe_funcs,
 				(void *) (uintptr_t) -1);

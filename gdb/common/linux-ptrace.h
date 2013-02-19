@@ -1,4 +1,4 @@
-/* Copyright (C) 2011-2012 Free Software Foundation, Inc.
+/* Copyright (C) 2011-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -68,5 +68,6 @@ struct buffer;
 #endif
 
 extern void linux_ptrace_attach_warnings (pid_t pid, struct buffer *buffer);
+extern void linux_ptrace_init_warnings (void);
 
 #endif /* COMMON_LINUX_PTRACE_H */

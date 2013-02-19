@@ -96,7 +96,7 @@ msgbox_init ()
   class.hInstance = TclWinGetTclInstance();
   class.hbrBackground = NULL;
   class.lpszMenuName = NULL;
-  class.lpszClassName = TEXT("ide_messagebox");
+  class.lpszClassName = TEXT ("ide_messagebox");
   class.lpfnWndProc = msgbox_wndproc;
   class.hIcon = NULL;
   class.hCursor = NULL;
@@ -104,7 +104,7 @@ msgbox_init ()
   if (! RegisterClass (&class))
     return TCL_ERROR;
 
-  hidden_hwnd = CreateWindow (TEXT("ide_messagebox"), TEXT("ide_messagebox"), WS_TILED,
+  hidden_hwnd = CreateWindow (TEXT ("ide_messagebox"), TEXT ("ide_messagebox"), WS_TILED,
 			      0, 0, 0, 0, NULL, NULL, class.hInstance, NULL);
   if (hidden_hwnd == NULL)
     return TCL_ERROR;
@@ -119,7 +119,7 @@ msgbox_exit (ClientData cd)
 {
   if (hidden_hwnd != NULL)
     {
-      UnregisterClass (TEXT("ide_messagebox"), TclWinGetTclInstance ());
+      UnregisterClass (TEXT ("ide_messagebox"), TclWinGetTclInstance ());
       DestroyWindow (hidden_hwnd);
       hidden_hwnd = NULL;
 
@@ -430,7 +430,7 @@ msgbox_internal (ClientData clientData, Tcl_Interp *interp, int argc,
 /* This is the ide_messageBox function.  */
 
 static int
-msgbox (ClientData cd, Tcl_Interp *interp, int argc,CONST84 char **argv)
+msgbox (ClientData cd, Tcl_Interp *interp, int argc, CONST84 char **argv)
 {
   if (argc < 2)
     {

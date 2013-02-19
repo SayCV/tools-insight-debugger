@@ -1,4 +1,4 @@
-# Copyright 2012 Free Software Foundation, Inc.
+# Copyright 2012-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +15,8 @@
 
 # Tests for linespec error conditions
 
-set base ls-errs
-set srcfile "$base.c"
-set testfile "$base.exp"
-set exefile $base
+standard_testfile
+set exefile $testfile
 
 if {[prepare_for_testing $testfile $exefile $srcfile \
 	 {debug nowarnings}]} {
@@ -116,7 +114,9 @@ foreach x [list "this_file_doesn't_exist.c" \
 	       "\"this \"file\" has quotes.c\"" \
 	       "'this \"file\" has quotes.c'" \
 	       "'this 'file' has quotes.c'" \
-	       "\"this 'file' has quotes.c\""] {
+	       "\"this 'file' has quotes.c\"" \
+	       "\"spaces: and :colons.c\"" \
+	       "'more: :spaces: :and  colons::.c'"] {
     # Remove any quoting from FILENAME for the error message.
     add the_tests "$x:3" invalid_file [string trim $x \"']
 }
@@ -146,6 +146,8 @@ add the_tests "$srcfile:3 foo" unexpected_opt "string" "foo"
 
 foreach x $invalid_offsets {
     add the_tests "$srcfile:$x" invalid_offset_f $x $srcfile
+    add the_tests "\"$srcfile:$x\"" invalid_offset_f $x $srcfile
+    add the_tests "'$srcfile:$x'" invalid_offset_f $x $srcfile
 }
 
 # Test invalid filespecs starting with function.
@@ -169,7 +171,7 @@ foreach x {"3" "+100" "-100" "foo"} {
 }
 
 foreach x {"if" "task" "thread"} {
-    add the_tests $x unexpected_opt "keyword" $x
+    add the_tests $x invalid_function $x
 }
 
 add the_tests "'main.c'flubber" unexpected_opt "string" "flubber"

@@ -1,6 +1,6 @@
 /* Target-dependent header for the MIPS architecture, for GDB, the GNU Debugger.
 
-   Copyright (C) 2002-2003, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -37,6 +37,14 @@ enum mips_abi
 
 /* Return the MIPS ABI associated with GDBARCH.  */
 enum mips_abi mips_abi (struct gdbarch *gdbarch);
+
+/* Base and compressed MIPS ISA variations.  */
+enum mips_isa
+  {
+    ISA_MIPS = -1,		/* mips_compression_string depends on it.  */
+    ISA_MIPS16,
+    ISA_MICROMIPS
+  };
 
 /* Return the MIPS ISA's register size.  Just a short cut to the BFD
    architecture's word size.  */
@@ -77,6 +85,7 @@ struct gdbarch_tdep
   /* mips options */
   enum mips_abi mips_abi;
   enum mips_abi found_abi;
+  enum mips_isa mips_isa;
   enum mips_fpu_type mips_fpu_type;
   int mips_last_arg_regnum;
   int mips_last_fp_arg_regnum;
@@ -152,12 +161,23 @@ enum
 /* Single step based on where the current instruction will take us.  */
 extern int mips_software_single_step (struct frame_info *frame);
 
+/* Tell if the program counter value in MEMADDR is in a standard
+   MIPS function.  */
+extern int mips_pc_is_mips (bfd_vma memaddr);
+
 /* Tell if the program counter value in MEMADDR is in a MIPS16
    function.  */
-extern int mips_pc_is_mips16 (bfd_vma memaddr);
+extern int mips_pc_is_mips16 (struct gdbarch *gdbarch, bfd_vma memaddr);
+
+/* Tell if the program counter value in MEMADDR is in a microMIPS
+   function.  */
+extern int mips_pc_is_micromips (struct gdbarch *gdbarch, bfd_vma memaddr);
 
 /* Return the currently configured (or set) saved register size.  */
 extern unsigned int mips_abi_regsize (struct gdbarch *gdbarch);
+
+/* Make PC the address of the next instruction to execute.  */
+extern void mips_write_pc (struct regcache *regcache, CORE_ADDR pc);
 
 /* Target descriptions which only indicate the size of general
    registers.  */
