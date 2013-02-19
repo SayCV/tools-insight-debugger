@@ -1,6 +1,0 @@
-2013-02-15  Keith Seitz  <keiths@redhat.com>
-
-	* generic/gdbtk-bp.c (gdb_find_bp_at_line): Update struct
-	bp_location changes wrt source_file from GDB.
-
-
