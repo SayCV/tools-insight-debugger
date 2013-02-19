@@ -1175,7 +1175,8 @@ Tcl_DdeObjCmd(
 	}
 	case DDE_EVAL: {
 	    objc -= (async + 3);
-	    ((Tcl_Obj **) objv) += (async + 3);
+	    /* ((Tcl_Obj **) objv) += (async + 3); */
+	    objv =((Tcl_Obj **) objv) + (async + 3);
 
             /*
 	     * See if the target interpreter is local.  If so, execute

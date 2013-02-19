@@ -26,7 +26,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
+
+#define __SAYCV_BUILD_WIN32API_INSIDE_CYGWIN__	1
+ 
 /*
  * The following defines are used to indicate the various release levels.
  */
