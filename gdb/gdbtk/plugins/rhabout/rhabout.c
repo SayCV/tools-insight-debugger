@@ -1,5 +1,14 @@
 /* Sample command procedure library for a plug-in. */
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+/* tcl header files includes varargs.h unless HAS_STDARG is defined,
+   but gdb uses stdarg.h, so make sure HAS_STDARG is defined.  */
+#define HAS_STDARG 1
+
 /* You have to include the Tcl headers, of course. */
 #include <tcl.h>
 
